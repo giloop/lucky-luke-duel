@@ -2,6 +2,7 @@ import {
     AnimationAction,
     AnimationClip,
     AnimationMixer,
+    LoopOnce,
     AudioLoader,
     AxesHelper,
     Color,
@@ -222,9 +223,9 @@ export const luckyLukeDemo: DemoHandler = {
         let berimbauPlaying = false;
         let audioCtx: AudioContext | undefined;
 
-        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Berimb1.mp3")
+        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Duel.mp3")
             .then((buf) => { berimbauBuffer = buf; })
-            .catch((err) => console.warn("Could not load Berimb1.mp3:", err));
+            .catch((err) => console.warn("Could not load Duel.mp3:", err));
 
         let gunLoadBuffer: AudioBuffer | undefined;
         let gunReleaseBuffer: AudioBuffer | undefined;
@@ -340,7 +341,7 @@ export const luckyLukeDemo: DemoHandler = {
             }
 
             if (gunL && gunholdL && gunR && gunholdR) {
-                initgunsPosition();
+                initGunsPosition();
             }
             // Rebuild debug axes helpers for the new rig (hidden by default)
             debugAxesHelpers.forEach((h) => h.parent?.remove(h));
@@ -412,6 +413,11 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction = undefined;
             animationPlaying = false;
             mixer = new AnimationMixer(root);
+            mixer.addEventListener("finished", () => {
+                if (animationPlaying && !(tracker.poseTracker?.detected)) {
+                    playNextIdleAnimation();
+                }
+            });
         }
 
         // Returns true when the character is facing the camera:
@@ -520,27 +526,71 @@ export const luckyLukeDemo: DemoHandler = {
             }
         }
 
-        function initgunsPosition() {
+        let idleAnimIndex = -1;
+
+        function playNextIdleAnimation() {
+            if (!mixer || clips.length === 0) return;
+            let next = idleAnimIndex;
+            if (clips.length > 1) {
+                while (next === idleAnimIndex) next = Math.floor(Math.random() * clips.length);
+            } else {
+                next = 0;
+            }
+            idleAnimIndex = next;
+            currentAction?.stop();
+            currentAction = mixer.clipAction(clips[next]);
+            currentAction.setLoop(LoopOnce, 1);
+            currentAction.clampWhenFinished = true;
+            currentAction.reset().play();
+            animationPlaying = true;
+        }
+
+        function initGunsPosition() {
             // Set Guns initial position in the holster and parent them to the gunholds
-            gunholdL.add(gunL);
-            gunL.position.copy(gunLRestPos);
-            gunL.quaternion.copy(gunLRestQuat);
-            gunLHeld = false;
-            gunholdR.add(gunR);
-            gunR.position.copy(gunRRestPos);
-            gunR.quaternion.copy(gunRRestQuat);
-            gunRHeld = false;
+            if (gunholdL && gunL) {
+                gunholdL.add(gunL);
+                gunL.position.copy(gunLRestPos);
+                gunL.quaternion.copy(gunLRestQuat);
+                gunLHeld = false;
+            }
+            if (gunholdR && gunR) {
+                gunholdR.add(gunR);
+                gunR.position.copy(gunRRestPos);
+                gunR.quaternion.copy(gunRRestQuat);
+                gunRHeld = false;
+            }
         }
 
 
 
         new GLTFLoader().load(DEFAULT_MODEL, setActiveRig);
 
+        let wasDetected = false;
+
         return (delta: number) => {
             ctrl.update();
+
+            const detected = tracker.poseTracker?.detected ?? false;
+
+            if (!wasDetected && detected && animationPlaying) {
+                // Person re-detected — stop idle animation so tracking takes over
+                currentAction?.stop();
+                currentAction = undefined;
+                animationPlaying = false;
+            }
+
+            if (wasDetected && !detected) {
+                // Just lost detection — reset guns and start idle animation chain
+                if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
+                idleAnimIndex = -1;
+                playNextIdleAnimation();
+            }
+
+            wasDetected = detected;
+
             if (animationPlaying && mixer) {
                 mixer.update(delta);
-            } else if (tracker.poseTracker?.detected) {
+            } else if (detected) {
                 lukeBind?.update(delta);
                 updateGunGrab();
                 updateBerimbau();
