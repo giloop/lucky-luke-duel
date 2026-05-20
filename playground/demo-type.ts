@@ -1,0 +1,14 @@
+import { Tracker } from "src/tracking/Tracker";
+import { TrackerConfig, TrackerHandler } from "lucky-luke-duel";
+import { PerspectiveCamera, Scene, WebGPURenderer } from "three/webgpu"; 
+
+export type DemoHandler = {
+	name:string,
+	trackerConfig:Partial<TrackerConfig>,
+	setup: ( renderer:WebGPURenderer, camera:PerspectiveCamera, scene:Scene, tracker:TrackerHandler)=>(delta:number)=>void
+}; 
+
+export type StandaloneDemoHandler = {
+	name:string,
+	setup: ( renderer:WebGPURenderer, camera:PerspectiveCamera, scene:Scene, ...ignore:any[])=>(delta:number)=>void
+};

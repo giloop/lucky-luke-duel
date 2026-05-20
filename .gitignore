@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.local
+.vite/
+web/
+.npmrc
+3d/
+wasm/
+*.task
+_ignore/
+notes*
+models/*.task
+models/*.pdf

@@ -1,0 +1,23 @@
+/// <reference types="vite/client" />
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+	"allowJs": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "lib": ["ES2022", "DOM", "DOM.Iterable" ],
+	"paths": {
+      "lucky-luke-duel": ["./src/module.ts"],
+      "lucky-luke-duel/meshcap": ["./src/meshcap/meshcap.ts"]
+    }
+  },
+  "include": ["src","playground"]
+}

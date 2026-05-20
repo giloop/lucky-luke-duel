@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+	<link rel="shortcut icon" href="favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lucky Luke - Duel</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; }
+      canvas { display: block;  }
+	  #infos {
+		position: fixed;
+		bottom:0px;
+		left:0px;
+		max-width: 900px;
+		background-color: rgba(0,0,0,0.5);
+		color: white;
+		padding: 10px;
+	  }
+	  #infos a {color:cyan}
+	  .source-btn {
+        position: absolute;
+        bottom: 32px;
+        right: 32px;
+        color: black;
+		background-color: white;
+		box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+		border-radius: 114px;
+		padding: 18px;
+        font-family: system-ui, sans-serif;
+        font-size: 24px; 
+        text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+		cursor: pointer;
+		z-index: 2;
+      }
+    </style>
+  </head>
+  <body>
+	<div id="infos">Infos</div>
+  <script type="module" src="/playground/main.ts"></script>
+  </body>
+</html>
