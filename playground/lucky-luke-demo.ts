@@ -38,7 +38,8 @@ import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
-const GRAB_THRESHOLD = 0.1; // world-unit proximity to trigger grab/release
+const GRAB_THRESHOLD = 0.05; // world-unit proximity to trigger grab/release
+const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const infosEl = document.getElementById("infos")!;
 
 export const luckyLukeDemo: DemoHandler = {
@@ -165,6 +166,10 @@ export const luckyLukeDemo: DemoHandler = {
         const videoSourcePanel = inspector.createParameters("Video source");
         videoSourcePanel.add(actions, "inputWebcam").name("Webcam");
         videoSourcePanel.add(actions, "inputFile").name("Video File");
+
+        if (tracker.poseTracker) {
+            tracker.poseTracker.root.rotation.x = X_POSE_ROTATION * Math.PI / 180;
+        }
 
         const poseSettings = inspector.createParameters("Pose settings");
         poseSettings
