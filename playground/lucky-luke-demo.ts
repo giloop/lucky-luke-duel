@@ -40,7 +40,7 @@ import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
 const GRAB_THRESHOLD = 0.05; // world-unit proximity to trigger grab/release
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
-const infosEl = document.getElementById("infos")!;
+const PROD_MODE = false;
 
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
@@ -62,7 +62,8 @@ export const luckyLukeDemo: DemoHandler = {
         renderer.shadowMap.enabled = true;
         //renderer.shadowMap.type = PCFSoftShadowMap;
 
-        scene.add(new AxesHelper(1));
+        const axesHelper = new AxesHelper(1);
+        scene.add(axesHelper);
 
         const ctrl = new OrbitControls(camera, renderer.domElement);
         ctrl.dampingFactor = 0.2;
@@ -98,7 +99,8 @@ export const luckyLukeDemo: DemoHandler = {
         scene.add( spotLight );
         scene.add( spotLight.target );
 
-        scene.add( new SpotLightHelper( spotLight, 10 ) );
+        const spotLightHelper = new SpotLightHelper( spotLight, 10 );
+        scene.add( spotLightHelper );
         
 
 
@@ -132,6 +134,33 @@ export const luckyLukeDemo: DemoHandler = {
         const inspector = new Inspector();
         renderer.inspector = inspector;
         inspector.init();
+
+        const applyProdMode = (on: boolean) => {
+            (inspector.domElement as HTMLElement).style.display = on ? 'none' : '';
+            (tracker.domElement as HTMLElement).style.display = on ? 'none' : '';
+        };
+
+        // — Loading overlay —
+        const loadingOverlay = document.getElementById('loading-overlay')!;
+        const progressFill = document.getElementById('loading-fill') as HTMLElement;
+        const startBtn = document.getElementById('start-btn') as HTMLElement;
+
+        const TOTAL_ASSETS = 5;
+        let loadedCount = 0;
+        const onAssetLoaded = () => {
+            loadedCount++;
+            progressFill.style.width = `${(loadedCount / TOTAL_ASSETS) * 100}%`;
+            if (loadedCount < TOTAL_ASSETS) return;
+            document.getElementById('loading-track')!.style.display = 'none';
+            startBtn.style.display = 'block';
+            startBtn.addEventListener('click', () => loadingOverlay.remove(), { once: true });
+        };
+
+        // — Production mode checkbox —
+        const prodCheckbox = document.getElementById('prod-checkbox') as HTMLInputElement;
+        prodCheckbox.checked = PROD_MODE;
+        prodCheckbox.addEventListener('change', () => applyProdMode(prodCheckbox.checked));
+        if (PROD_MODE) applyProdMode(true);
 
         const actions = {
             inputWebcam: () => {
@@ -243,11 +272,11 @@ export const luckyLukeDemo: DemoHandler = {
 
         const modelPanel = inspector.createParameters("Model");
         modelPanel.add(actions, "loadModel").name("Load model (.glb)");
-        modelPanel.add(shadowOpt, "castShadow").name("Cast shadow").onChange((v: boolean) => {
-            modelRoot?.traverse((child: Object3D) => {
-                if (child instanceof Mesh) child.castShadow = v;
-            });
-        });
+        // modelPanel.add(shadowOpt, "castShadow").name("Cast shadow").onChange((v: boolean) => {
+        //     modelRoot?.traverse((child: Object3D) => {
+        //         if (child instanceof Mesh) child.castShadow = v;
+        //     });
+        // });
         modelPanel.add({
             logCamera: () => {
                 console.log("Camera position:", camera.position.toArray().map(n => +n.toFixed(3)));
@@ -256,6 +285,14 @@ export const luckyLukeDemo: DemoHandler = {
                 console.log("Camera rotation (deg):", [camera.rotation.x, camera.rotation.y, camera.rotation.z].map(r => +(r * 180 / Math.PI).toFixed(1)));
             }
         }, "logCamera").name("Log camera");
+        modelPanel
+            .add({ axisHelpers: true }, "axisHelpers")
+            .name("Axis helpers")
+            .onChange((v: boolean) => {
+                axesHelper.visible = v;
+                dirLightHelper.visible = v;
+                spotLightHelper.visible = v;
+            });
 
         // — Animations —
 
@@ -275,7 +312,8 @@ export const luckyLukeDemo: DemoHandler = {
                 animPanel.add(animState, "clip", clips.map((c) => c.name)).name("Animation");
                 animPanel.add({ toggle: toggleAnimation }, "toggle").name("Play / Stop");
             })
-            .catch((err) => console.warn("Could not load animations.glb:", err));
+            .catch((err) => console.warn("Could not load animations.glb:", err))
+            .finally(onAssetLoaded);
 
         // — Audio —
 
@@ -285,16 +323,19 @@ export const luckyLukeDemo: DemoHandler = {
 
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Duel.mp3")
             .then((buf) => { berimbauBuffer = buf; })
-            .catch((err) => console.warn("Could not load Duel.mp3:", err));
+            .catch((err) => console.warn("Could not load Duel.mp3:", err))
+            .finally(onAssetLoaded);
 
         let gunLoadBuffer: AudioBuffer | undefined;
         let gunReleaseBuffer: AudioBuffer | undefined;
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunLoad.mp3")
             .then((buf) => { gunLoadBuffer = buf; })
-            .catch((err) => console.warn("Could not load GunLoad.mp3:", err));
+            .catch((err) => console.warn("Could not load GunLoad.mp3:", err))
+            .finally(onAssetLoaded);
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunRelease.mp3")
             .then((buf) => { gunReleaseBuffer = buf; })
-            .catch((err) => console.warn("Could not load GunRelease.mp3:", err));
+            .catch((err) => console.warn("Could not load GunRelease.mp3:", err))
+            .finally(onAssetLoaded);
 
         function playOneShot(buf: AudioBuffer | undefined) {
             if (!buf) return;
@@ -504,7 +545,6 @@ export const luckyLukeDemo: DemoHandler = {
                 if (closeL && !gunLWasClose) {
                     scene.updateMatrixWorld(true);
                     if (!gunLHeld) {
-                        infosEl.textContent = "Gun L: HELD";
                         const grabParentL = forearmL ?? handL;
                         grabParentL.attach(gunL);
                         handL.getWorldPosition(_posA);
@@ -517,7 +557,6 @@ export const luckyLukeDemo: DemoHandler = {
                         playOneShot(gunLoadBuffer);
                         gunLHeld = true;
                     } else {
-                        infosEl.textContent = "Gun L: RELEASED";
                         gunholdL.add(gunL);
                         gunL.position.copy(gunLRestPos);
                         gunL.quaternion.copy(gunLRestQuat);
@@ -536,7 +575,6 @@ export const luckyLukeDemo: DemoHandler = {
                 if (closeR && !gunRWasClose) {
                     scene.updateMatrixWorld(true);
                     if (!gunRHeld) {
-                        infosEl.textContent = "Gun R: HELD";
                         const grabParentR = forearmR ?? handR;
                         grabParentR.attach(gunR);
                         handR.getWorldPosition(_posA);
@@ -549,7 +587,6 @@ export const luckyLukeDemo: DemoHandler = {
                         playOneShot(gunLoadBuffer);
                         gunRHeld = true;
                     } else {
-                        infosEl.textContent = "Gun R: RELEASED";
                         gunholdR.add(gunR);
                         gunR.position.copy(gunRRestPos);
                         gunR.quaternion.copy(gunRRestQuat);
@@ -623,7 +660,7 @@ export const luckyLukeDemo: DemoHandler = {
 
 
 
-        new GLTFLoader().load(DEFAULT_MODEL, setActiveRig);
+        new GLTFLoader().load(DEFAULT_MODEL, (gltf) => { setActiveRig(gltf); onAssetLoaded(); });
 
         let wasDetected = false;
 

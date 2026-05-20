@@ -12,3 +12,4 @@ notes*
 models/*.task
 models/*.pdf
 public/test*.*
+Todo-Preprompt-Claude.txt
