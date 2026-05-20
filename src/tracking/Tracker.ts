@@ -15,6 +15,7 @@ const C = new THREE.Vector3();
 
 export class Tracker<T extends Record<string, number|number[]> > {
 	private objectGhost : Map<THREE.Object3D, Ghost> ;
+	private readonly _normPos: { [name in keyof T]?: THREE.Vector3 } = {} as { [name in keyof T]?: THREE.Vector3 };
 	readonly root:THREE.Object3D;
 
 	/**
@@ -108,6 +109,43 @@ export class Tracker<T extends Record<string, number|number[]> > {
 
 	test( key:keyof T ){
 		this.marks[key]!.position.set(1,2,3)
+	}
+
+	getMarkWorldPosition( key:keyof T, out:THREE.Vector3 = new THREE.Vector3() ): THREE.Vector3 {
+		return this.marks[key].getWorldPosition(out);
+	}
+
+	/** Raw MediaPipe worldLandmark position — no root scale or transform applied. */
+	getMarkPosition( key:keyof T, out:THREE.Vector3 = new THREE.Vector3() ): THREE.Vector3 {
+		return out.copy( this.marks[key].position );
+	}
+
+	/** Raw MediaPipe normalized landmark position (x/y in [0,1] screen space, z = depth). */
+	getNormalizedMarkPosition( key:keyof T, out:THREE.Vector3 = new THREE.Vector3() ): THREE.Vector3 {
+		const pos = this._normPos[key];
+		return pos ? out.copy(pos) : out.setScalar(0);
+	}
+
+	protected updateNormalizedLandmarks( landmarks:NormalizedLandmark[] ) {
+		for( let key in this.points ) {
+			const k = key as keyof T;
+			const point = this.points[k];
+			if( !this._normPos[k] ) this._normPos[k] = new THREE.Vector3();
+			const pos = this._normPos[k]!;
+
+			if( Array.isArray(point) ) {
+				v.copy( landmarks[ point[0] ] );
+				pos.copy( landmarks[ point[1] ] ).sub(v).divideScalar(2).add( landmarks[ point[0] ] );
+				if( point.length === 4 ) {
+					v.subVectors( landmarks[ point[3] ], landmarks[ point[2] ] )
+						.divideScalar(2).add( landmarks[ point[2] ] )
+						.sub(pos).divideScalar(2);
+					pos.add(v);
+				}
+			} else {
+				pos.copy( landmarks[ point as number ] );
+			}
+		}
 	}
 
 	protected syncObjects(objects: [THREE.Object3D, keyof T, keyof T,LookAtPoleAxis][], delta:number, normal:THREE.Vector3 ){

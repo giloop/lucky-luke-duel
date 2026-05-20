@@ -2,7 +2,8 @@ import {
     DrawingUtils,
     NormalizedLandmark,
     PoseLandmarker,
-} from "@mediapipe/tasks-vision"; 
+    PoseLandmarkerResult,
+} from "@mediapipe/tasks-vision";
 import * as THREE from "three/webgpu";
 import { lookAt, LookAtPoleAxis } from "./util/lookAt";
 import { Tracker } from "./Tracker";
@@ -87,11 +88,15 @@ type PoseTrackerConfig = {
 export class PoseTracker extends Tracker<typeof poseMarks> {
 	private _leftWristNormalizedPosition!:NormalizedLandmark;
 	private _rightWristNormalizedPosition!:NormalizedLandmark;
+	private _lastResult: PoseLandmarkerResult | undefined;
 
 	ignoreLegs:boolean = false;
 
 	/** True when at least one pose was detected in the last frame. */
 	detected:boolean = false;
+
+	/** The raw result from the last call to detectForVideo. */
+	get lastResult() { return this._lastResult; }
 
 	/**
 	 * Position of the left wrist in normalized coordinates (0..1)
@@ -117,6 +122,8 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 	override predict( source:TexImageSource, drawingUtils:DrawingUtils ){
 		this.poseLandmarker.detectForVideo( source, performance.now(), (result) => {
 
+			this._lastResult = result;
+
 			if( result.landmarks.length==0 )
 			{
 				this.detected = false;
@@ -124,7 +131,8 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 			}
 
 			this.detected = true;
-			this.updateLandmarks( result.worldLandmarks[0], this.config?.drawLandmarks===false ? undefined : result.landmarks[0],  drawingUtils );
+			this.updateLandmarks( result.worldLandmarks[0], this.config?.drawLandmarks===false ? undefined : result.landmarks[0], drawingUtils );
+			this.updateNormalizedLandmarks( result.landmarks[0] );
 
 			
 			this._leftWristNormalizedPosition = result.landmarks[0][ this.points.leftWrist ];

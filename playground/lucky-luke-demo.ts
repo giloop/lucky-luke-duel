@@ -5,7 +5,11 @@ import {
     LoopOnce,
     AudioLoader,
     AxesHelper,
+    BufferAttribute,
+    BufferGeometry,
     Color,
+    LineBasicMaterial,
+    LineSegments,
     DirectionalLight,
     DirectionalLightHelper,
     Material,
@@ -170,11 +174,62 @@ export const luckyLukeDemo: DemoHandler = {
                 if (tracker.poseTracker) tracker.poseTracker.ignoreLegs = v;
             });
 
+        let debugBonesEnabled = false;
+
+        const POSE_PAIRS: [string, string][] = [
+            ["hips", "torso"], ["torso", "neck"], ["neck", "head"],
+            ["neck", "leftArm"],   ["leftArm",  "leftElbow"],  ["leftElbow",  "leftWrist"],
+            ["neck", "rightArm"],  ["rightArm", "rightElbow"], ["rightElbow", "rightWrist"],
+            ["hips", "leftLeg"],   ["leftLeg",  "leftKnee"],   ["leftKnee",   "leftFoot"],
+            ["hips", "rightLeg"],  ["rightLeg", "rightKnee"],  ["rightKnee",  "rightFoot"],
+        ];
+        // Green = worldLandmarks (3D metres, body-centred)
+        const skeletonBuf = new Float32Array(POSE_PAIRS.length * 6);
+        const skeletonGeo = new BufferGeometry();
+        skeletonGeo.setAttribute("position", new BufferAttribute(skeletonBuf, 3));
+        const skeletonLines = new LineSegments(
+            skeletonGeo,
+            new LineBasicMaterial({ color: 0x00ff00, depthTest: false }),
+        );
+        skeletonLines.position.set(0, 0.87, 0);
+        skeletonLines.visible = false;
+        scene.add(skeletonLines);
+
+        // Red = landmarks (normalised screen-space: x/y in [0,1], z = depth)
+        const skeletonNormBuf = new Float32Array(POSE_PAIRS.length * 6);
+        const skeletonNormGeo = new BufferGeometry();
+        skeletonNormGeo.setAttribute("position", new BufferAttribute(skeletonNormBuf, 3));
+        const skeletonNormLines = new LineSegments(
+            skeletonNormGeo,
+            new LineBasicMaterial({ color: 0xff0000, depthTest: false }),
+        );
+        skeletonNormLines.position.set(-1, 1.4, -0.5);
+        skeletonNormLines.rotation.set(-30 * Math.PI / 180, 0, 0);
+        skeletonNormLines.visible = false;
+        scene.add(skeletonNormLines);
+
+        poseSettings.add({
+            logDetection: () => {
+                if (tracker.poseTracker?.detected) {
+                    console.log(tracker.poseTracker.lastResult);
+                    console.log("Hips center world position:", tracker.poseTracker.getMarkWorldPosition("hips"));
+                    console.log("Hips center landmark position:", tracker.poseTracker.getMarkPosition("hips"));
+                    console.log("Torso center world position:", tracker.poseTracker.getMarkWorldPosition("torso"));
+                    console.log("Torso center landmark position:", tracker.poseTracker.getMarkPosition("torso"));
+                } else {
+                    console.log("No detection");
+                }
+            }
+        }, "logDetection").name("Log detection");
+
         const debugAxesHelpers: AxesHelper[] = [];
         poseSettings
             .add({ debugBones: false }, "debugBones")
             .name("Debug bones")
             .onChange((v: boolean) => {
+                debugBonesEnabled = v;
+                skeletonLines.visible = v;
+                skeletonNormLines.visible = v;
                 debugAxesHelpers.forEach((h) => (h.visible = v));
             });
 
@@ -594,6 +649,24 @@ export const luckyLukeDemo: DemoHandler = {
                 lukeBind?.update(delta);
                 updateGunGrab();
                 updateBerimbau();
+            }
+
+            if (debugBonesEnabled && tracker.poseTracker) {
+                const pt = tracker.poseTracker;
+                for (let i = 0; i < POSE_PAIRS.length; i++) {
+                    const b = i * 6;
+                    pt.getMarkPosition(POSE_PAIRS[i][0] as any, _posA);
+                    pt.getMarkPosition(POSE_PAIRS[i][1] as any, _posB);
+                    skeletonBuf[b]   = _posA.x; skeletonBuf[b+1] = _posA.y*-1; skeletonBuf[b+2] = _posA.z*-1;
+                    skeletonBuf[b+3] = _posB.x; skeletonBuf[b+4] = _posB.y*-1; skeletonBuf[b+5] = _posB.z*-1;
+
+                    pt.getNormalizedMarkPosition(POSE_PAIRS[i][0] as any, _posA);
+                    pt.getNormalizedMarkPosition(POSE_PAIRS[i][1] as any, _posB);
+                    skeletonNormBuf[b]   = _posA.x * 2; skeletonNormBuf[b+1] = _posA.y * -2; skeletonNormBuf[b+2] = _posA.z * -2;
+                    skeletonNormBuf[b+3] = _posB.x * 2; skeletonNormBuf[b+4] = _posB.y * -2; skeletonNormBuf[b+5] = _posB.z * -2;
+                }
+                skeletonGeo.attributes.position.needsUpdate = true;
+                skeletonNormGeo.attributes.position.needsUpdate = true;
             }
         };
     },
