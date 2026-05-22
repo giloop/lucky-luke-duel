@@ -307,10 +307,10 @@ export const luckyLukeDemo: DemoHandler = {
         // new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "animations.glb")
         new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "animations.glb")
             .then((gltf) => {
-                clips = gltf.animations;
-                if (clips.length === 0) return;
-                animState.clip = clips[0].name;
-                animPanel.add(animState, "clip", clips.map((c) => c.name)).name("Animation");
+                clips.push(...gltf.animations);
+                if (gltf.animations.length === 0) return;
+                animState.clip = gltf.animations[0].name;
+                animPanel.add(animState, "clip", gltf.animations.map((c) => c.name)).name("Animation");
                 animPanel.add({ toggle: toggleAnimation }, "toggle").name("Play / Stop");
             })
             .catch((err) => console.warn("Could not load animations.glb:", err))
@@ -370,10 +370,10 @@ export const luckyLukeDemo: DemoHandler = {
             duelTransitioning = true;
             duelGunTriggered = false;
 
-            const duelClip = clips.find(c => c.name === 'idle-duel');
-            if (!duelClip) { 
-                console.warn("Could not find duel clip");
-                duelTransitioning = false; 
+            const duelClip = clips.find(c => c.name === 'Recording-3');
+            if (!duelClip) {
+                console.warn("Could not find duel clip 'Recording-3' in", clips.map(c => c.name));
+                duelTransitioning = false;
                 return; }
 
             currentAction?.stop();
@@ -451,7 +451,6 @@ export const luckyLukeDemo: DemoHandler = {
         let upperArmR: Object3D | undefined;
         let gunholdL: Object3D | undefined;
         let gunholdR: Object3D | undefined;
-        let eyeR: Object3D | undefined;
         let gunL: Object3D | undefined;
         let gunR: Object3D | undefined;
 
@@ -503,7 +502,6 @@ export const luckyLukeDemo: DemoHandler = {
             upperArmR = root.getObjectByName("upper_armR");
             gunholdL  = root.getObjectByName("gunholdL");
             gunholdR  = root.getObjectByName("gunholdR");
-            eyeR      = root.getObjectByName("eyeR");
             gunL      = root.getObjectByName("Gun-L");
             gunR      = root.getObjectByName("Gun-R");
 
@@ -537,7 +535,9 @@ export const luckyLukeDemo: DemoHandler = {
             // Reset interaction state for the new rig
             gunLHeld = false; gunLWasClose = false;
             gunRHeld = false; gunRWasClose = false;
-            handsAboveEyeWas = false;
+            // Start true so the first detection frame can't accidentally fire playDuel —
+            // the user must lower their hands at least once before the rising edge triggers.
+            handsAboveEyeWas = true;
 
             disposeOld = () => {
                 debugAxesHelpers.forEach((h) => h.parent?.remove(h));
@@ -565,7 +565,7 @@ export const luckyLukeDemo: DemoHandler = {
                         (obj as SkinnedMesh).skeleton?.dispose();
                     }
                 });
-                handL = handR = forearmL = forearmR = upperArmL = upperArmR = gunholdL = gunholdR = eyeR = gunL = gunR = undefined;
+                handL = handR = forearmL = forearmR = upperArmL = upperArmR = gunholdL = gunholdR = gunL = gunR = undefined;
                 disposeOld = undefined;
             };
 
@@ -686,11 +686,14 @@ export const luckyLukeDemo: DemoHandler = {
         }
 
         function updateBerimbau() {
-            if (!eyeR || !handL || !handR) return;
-            eyeR.getWorldPosition(_posC);
-            handL.getWorldPosition(_posA);
-            handR.getWorldPosition(_posB);
-            const handsAbove = _posA.y > _posC.y && _posB.y > _posC.y;
+            if (duelMode || duelTransitioning) return;
+            const pt = tracker.poseTracker;
+            if (!pt) return;
+            // normalized y: 0 = top of screen, 1 = bottom — "above head" means smaller y
+            const headPos = pt.getNormalizedMarkPosition('head' as any, _posC);
+            const lwPos = pt.getNormalizedMarkPosition('leftWrist' as any, _posA);
+            const rwPos = pt.getNormalizedMarkPosition('rightWrist' as any, _posB);
+            const handsAbove = lwPos.y < headPos.y - 0.1 && rwPos.y < headPos.y - 0.1;
             if (handsAbove && !handsAboveEyeWas) playDuel();
             handsAboveEyeWas = handsAbove;
         }
