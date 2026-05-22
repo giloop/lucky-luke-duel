@@ -3,6 +3,7 @@ import {
     AnimationClip,
     AnimationMixer,
     LoopOnce,
+    LoopRepeat,
     AudioLoader,
     AxesHelper,
     BufferAttribute,
@@ -145,7 +146,7 @@ export const luckyLukeDemo: DemoHandler = {
         const progressFill = document.getElementById('loading-fill') as HTMLElement;
         const startBtn = document.getElementById('start-btn') as HTMLElement;
 
-        const TOTAL_ASSETS = 5;
+        const TOTAL_ASSETS = 7;
         let loadedCount = 0;
         const onAssetLoaded = () => {
             loadedCount++;
@@ -315,19 +316,22 @@ export const luckyLukeDemo: DemoHandler = {
             .catch((err) => console.warn("Could not load animations.glb:", err))
             .finally(onAssetLoaded);
 
+        new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "idle-duel.glb")
+            .then((gltf) => { clips.push(...gltf.animations); })
+            .catch((err) => console.warn("Could not load idle-duel.glb:", err))
+            .finally(onAssetLoaded);
+
         // — Audio —
 
-        let berimbauBuffer: AudioBuffer | undefined;
-        let berimbauPlaying = false;
         let audioCtx: AudioContext | undefined;
 
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Duel.mp3")
-            .then((buf) => { berimbauBuffer = buf; })
             .catch((err) => console.warn("Could not load Duel.mp3:", err))
             .finally(onAssetLoaded);
 
         let gunLoadBuffer: AudioBuffer | undefined;
         let gunReleaseBuffer: AudioBuffer | undefined;
+        let gunShotBuffer: AudioBuffer | undefined;
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunLoad.mp3")
             .then((buf) => { gunLoadBuffer = buf; })
             .catch((err) => console.warn("Could not load GunLoad.mp3:", err))
@@ -335,6 +339,10 @@ export const luckyLukeDemo: DemoHandler = {
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunRelease.mp3")
             .then((buf) => { gunReleaseBuffer = buf; })
             .catch((err) => console.warn("Could not load GunRelease.mp3:", err))
+            .finally(onAssetLoaded);
+        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Gunshot.mp3")
+            .then((buf) => { gunShotBuffer = buf; })
+            .catch((err) => console.warn("Could not load Gunshot.mp3:", err))
             .finally(onAssetLoaded);
 
         function playOneShot(buf: AudioBuffer | undefined) {
@@ -346,16 +354,87 @@ export const luckyLukeDemo: DemoHandler = {
             src.start(0);
         }
 
-        function playBerimbau() {
-            console.log("Play berimbau!");
-            if (!berimbauBuffer || berimbauPlaying) return;
-            if (!audioCtx) audioCtx = new AudioContext();
-            berimbauPlaying = true;
-            const source = audioCtx.createBufferSource();
-            source.buffer = berimbauBuffer;
-            source.connect(audioCtx.destination);
-            source.onended = () => { berimbauPlaying = false; };
-            source.start(0);
+        // — Duel state —
+        let duelMode = false;
+        let duelTransitioning = false;
+        let duelGunTriggered = false;
+        let duelLayIdlePlaying = false;
+
+        const duelCountdownEl = document.getElementById('duel-countdown') as HTMLElement;
+        const duelCountEl = document.getElementById('duel-count') as HTMLElement;
+
+        function playDuel() {
+            console.log("playDuel", { duelMode, duelTransitioning, mixer });
+
+            if (duelMode || duelTransitioning || !mixer) return;
+            duelTransitioning = true;
+            duelGunTriggered = false;
+
+            const duelClip = clips.find(c => c.name === 'idle-duel');
+            if (!duelClip) { 
+                console.warn("Could not find duel clip");
+                duelTransitioning = false; 
+                return; }
+
+            currentAction?.stop();
+            currentAction = mixer.clipAction(duelClip);
+            currentAction.setLoop(LoopRepeat, Infinity);
+            currentAction.reset().play();
+            animationPlaying = true;
+
+            duelCountdownEl.style.display = 'flex';
+            let count = 5;
+            duelCountEl.textContent = String(count);
+
+            const tick = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    duelCountEl.textContent = String(count);
+                } else {
+                    clearInterval(tick);
+                    duelCountEl.textContent = '0';
+                    setTimeout(() => {
+                        duelCountdownEl.style.display = 'none';
+                        currentAction?.stop();
+                        currentAction = undefined;
+                        animationPlaying = false;
+                        duelMode = true;
+                        duelTransitioning = false;
+                    }, 500);
+                }
+            }, 1000);
+        }
+
+        function triggerDuelShot() {
+            if (duelGunTriggered || !mixer) return;
+            duelGunTriggered = true;
+            duelMode = false;
+            duelTransitioning = true;
+
+            setTimeout(() => playOneShot(gunShotBuffer), 150);
+
+            const hitClip = clips.find(c => c.name === 'Hit_Knockback RT');
+            if (!hitClip) { duelTransitioning = false; duelGunTriggered = false; return; }
+
+            currentAction?.stop();
+            currentAction = mixer.clipAction(hitClip);
+            currentAction.setLoop(LoopOnce, 1);
+            currentAction.clampWhenFinished = true;
+            currentAction.reset().play();
+            animationPlaying = true;
+
+            setTimeout(() => {
+                if (!mixer) { duelTransitioning = false; duelGunTriggered = false; return; }
+                const layClip = clips.find(c => c.name === 'LayToIdle RT');
+                if (!layClip) { duelTransitioning = false; duelGunTriggered = false; animationPlaying = false; return; }
+                currentAction?.stop();
+                currentAction = mixer.clipAction(layClip);
+                currentAction.setLoop(LoopOnce, 1);
+                currentAction.clampWhenFinished = true;
+                currentAction.reset().play();
+                duelLayIdlePlaying = true;
+                // mixer "finished" handler finalises the sequence
+            }, 3000);
         }
 
         // — Rig management —
@@ -515,6 +594,14 @@ export const luckyLukeDemo: DemoHandler = {
             animationPlaying = false;
             mixer = new AnimationMixer(root);
             mixer.addEventListener("finished", () => {
+                if (duelLayIdlePlaying) {
+                    duelLayIdlePlaying = false;
+                    duelTransitioning = false;
+                    animationPlaying = false;
+                    duelGunTriggered = false;
+                    if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
+                    return;
+                }
                 if (animationPlaying && !(tracker.poseTracker?.detected)) {
                     playNextIdleAnimation();
                 }
@@ -553,10 +640,10 @@ export const luckyLukeDemo: DemoHandler = {
                         gunL.rotation.x += 1;
                         gunL.rotation.y += 0;
                         gunL.rotation.z += 0.3;
-                        
                         playOneShot(gunLoadBuffer);
                         gunLHeld = true;
-                    } else {
+                        if (duelMode) triggerDuelShot();
+                    } else if (!duelMode) {
                         gunholdL.add(gunL);
                         gunL.position.copy(gunLRestPos);
                         gunL.quaternion.copy(gunLRestQuat);
@@ -583,10 +670,10 @@ export const luckyLukeDemo: DemoHandler = {
                         gunR.rotation.x += 1;
                         gunR.rotation.y += 0;
                         gunR.rotation.z += -0.3;
-                        
                         playOneShot(gunLoadBuffer);
                         gunRHeld = true;
-                    } else {
+                        if (duelMode) triggerDuelShot();
+                    } else if (!duelMode) {
                         gunholdR.add(gunR);
                         gunR.position.copy(gunRRestPos);
                         gunR.quaternion.copy(gunRRestQuat);
@@ -604,7 +691,7 @@ export const luckyLukeDemo: DemoHandler = {
             handL.getWorldPosition(_posA);
             handR.getWorldPosition(_posB);
             const handsAbove = _posA.y > _posC.y && _posB.y > _posC.y;
-            if (handsAbove && !handsAboveEyeWas) playBerimbau();
+            if (handsAbove && !handsAboveEyeWas) playDuel();
             handsAboveEyeWas = handsAbove;
         }
 
@@ -669,14 +756,14 @@ export const luckyLukeDemo: DemoHandler = {
 
             const detected = tracker.poseTracker?.detected ?? false;
 
-            if (!wasDetected && detected && animationPlaying) {
+            if (!wasDetected && detected && animationPlaying && !duelTransitioning) {
                 // Person re-detected — stop idle animation so tracking takes over
                 currentAction?.stop();
                 currentAction = undefined;
                 animationPlaying = false;
             }
 
-            if (wasDetected && !detected) {
+            if (wasDetected && !detected && !duelMode && !duelTransitioning) {
                 // Just lost detection — reset guns and start idle animation chain
                 if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
                 idleAnimIndex = -1;
