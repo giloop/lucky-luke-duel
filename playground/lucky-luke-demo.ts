@@ -103,13 +103,11 @@ export const luckyLukeDemo: DemoHandler = {
         const spotLightHelper = new SpotLightHelper( spotLight, 10 );
         scene.add( spotLightHelper );
         
-
-
         // Floor plane
         const floorMat = new MeshPhongMaterial( {
 					color: 0xffffff,
 					shininess: 150,
-					specular: 0x111111
+					specular: 0xffffff
 				} );
 		const floor = new Mesh( new PlaneGeometry( 10, 10 ), floorMat ); 
 		floor.rotation.x = - Math.PI / 2;
