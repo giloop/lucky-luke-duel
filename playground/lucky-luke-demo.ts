@@ -43,11 +43,12 @@ const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
 const GRAB_THRESHOLD = 0.15; // world-unit proximity to trigger grab/release
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
+const USE_WEBCAM_BY_DEFAULT = true;
 
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
     trackerConfig: {
-        displayScale: 0.75,
+        displayScale: 0.5,
         ignoreFace: true,
         ignoreHands: true,
         debugVideo: import.meta.env.BASE_URL + "Lucky-luke.mp4",
@@ -134,6 +135,11 @@ export const luckyLukeDemo: DemoHandler = {
         const inspector = new Inspector();
         renderer.inspector = inspector;
         inspector.init();
+        if (USE_WEBCAM_BY_DEFAULT) {
+            tracker.setVideoFromWebcam(false).catch((err) => {
+                alert("Failed to access camera. Please allow camera access and try again. Err: " + err);
+            });
+        }
 
         const applyProdMode = (on: boolean) => {
             (inspector.domElement as HTMLElement).style.display = on ? 'none' : '';
@@ -481,6 +487,7 @@ export const luckyLukeDemo: DemoHandler = {
         const _posA = new Vector3();
         const _posB = new Vector3();
         const _posC = new Vector3();
+        const initialPosition = new Vector3(0,0,0);
 
         function setActiveRig(gltf: GLTF) {
             disposeOld?.();
@@ -500,7 +507,7 @@ export const luckyLukeDemo: DemoHandler = {
 
             modelRoot = root;
             scene.add(root);
-
+            
             // Resolve bones & mesh objects by their Blender-exported names
             handL     = root.getObjectByName("handL");
             handR     = root.getObjectByName("handR");
@@ -765,7 +772,7 @@ export const luckyLukeDemo: DemoHandler = {
 
         function playNextIdleAnimation() {
             if (!mixer || clips.length === 0) return;
-            let next = idleAnimIndex;
+            let next = idleAnimIndex === -1 ? clips.map(el => el.name).indexOf("Jump 2") : idleAnimIndex; // idleAnimIndex;
             let excludeClips = ['Idle duel', 'Fall dead', 'Grab fun', 'Stand up', 'Walk']; // clips to exclude from random selection 
             if (clips.length > 1) {
                 while (next === idleAnimIndex || excludeClips.includes(clips[next].name)) next = Math.floor(Math.random() * clips.length);
@@ -781,6 +788,16 @@ export const luckyLukeDemo: DemoHandler = {
             animationPlaying = true;
         }
 
+        function moveToInitialPosition() {
+            const direction = new Vector3().subVectors(initialPosition, modelRoot.position);
+            const distance = direction.length();
+            
+            if (distance > 0.025) { // Threshold to prevent jitter
+                direction.normalize(); // Normalize the direction vector
+                const movement = direction.multiplyScalar(0.025); // Calculate movement
+                modelRoot.position.add(movement); // Update character position
+            }
+        }
 
         function initGunsPosition() {
             // Set Guns initial position in the holster and parent them to the gunholds
@@ -864,6 +881,9 @@ export const luckyLukeDemo: DemoHandler = {
 
             if (animationPlaying && mixer) {
                 mixer.update(delta);
+                // In normal mode, if not detected, move character to initial position while playing idle animation
+                moveToInitialPosition();
+
             } else if (detected) {
                 lukeBind?.update(delta);
 
