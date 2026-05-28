@@ -42,7 +42,7 @@ import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
 const GRAB_THRESHOLD = 0.15; // world-unit proximity to trigger grab/release
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
-const PROD_MODE = false;
+const DEBUG_MODE = true;
 
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
@@ -145,7 +145,7 @@ export const luckyLukeDemo: DemoHandler = {
         const progressFill = document.getElementById('loading-fill') as HTMLElement;
         const startBtn = document.getElementById('start-btn') as HTMLElement;
 
-        const TOTAL_ASSETS = 7;
+        const TOTAL_ASSETS = 6; // 7; 
         let loadedCount = 0;
         const onAssetLoaded = () => {
             loadedCount++;
@@ -158,9 +158,9 @@ export const luckyLukeDemo: DemoHandler = {
 
         // — Production mode checkbox —
         const prodCheckbox = document.getElementById('prod-checkbox') as HTMLInputElement;
-        prodCheckbox.checked = PROD_MODE;
+        prodCheckbox.checked = DEBUG_MODE;
         prodCheckbox.addEventListener('change', () => applyProdMode(prodCheckbox.checked));
-        if (PROD_MODE) applyProdMode(true);
+        if (DEBUG_MODE) applyProdMode(false);
 
         const actions = {
             inputWebcam: () => {
@@ -303,7 +303,7 @@ export const luckyLukeDemo: DemoHandler = {
         const animState = { clip: "" };
 
         const animPanel = inspector.createParameters("Animations");
-        // new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "animations.glb")
+       
         new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "animations.glb")
             .then((gltf) => {
                 clips.push(...gltf.animations);
@@ -314,12 +314,7 @@ export const luckyLukeDemo: DemoHandler = {
             })
             .catch((err) => console.warn("Could not load animations.glb:", err))
             .finally(onAssetLoaded);
-
-        new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "idle-duel.glb")
-            .then((gltf) => { clips.push(...gltf.animations); })
-            .catch((err) => console.warn("Could not load idle-duel.glb:", err))
-            .finally(onAssetLoaded);
-
+        
         // — Audio —
 
         let audioCtx: AudioContext | undefined;
@@ -371,9 +366,9 @@ export const luckyLukeDemo: DemoHandler = {
             duelCountdown = true;
             duelGunTriggered = false;
 
-            const duelClip = clips.find(c => c.name === 'Recording-3');
+            const duelClip = clips.find(c => c.name === 'Idle duel');
             if (!duelClip) {
-                console.warn("Could not find duel clip 'Recording-3' in", clips.map(c => c.name));
+                console.warn("Could not find duel clip 'Idle duel' in", clips.map(c => c.name));
                 duelCountdown = false;
                 return; }
 
@@ -415,7 +410,7 @@ export const luckyLukeDemo: DemoHandler = {
 
             setTimeout(() => playOneShot(gunShotBuffer), 150);
 
-            const hitClip = clips.find(c => c.name === 'Hit_Knockback RT');
+            const hitClip = clips.find(c => c.name === 'Fall dead');
             if (!hitClip) { duelCountdown = false; duelGunTriggered = false; return; }
 
             currentAction?.stop();
@@ -427,7 +422,7 @@ export const luckyLukeDemo: DemoHandler = {
 
             setTimeout(() => {
                 if (!mixer) { duelCountdown = false; duelGunTriggered = false; return; }
-                const layClip = clips.find(c => c.name === 'LayToIdle RT');
+                const layClip = clips.find(c => c.name === 'Stand up');
                 if (!layClip) { duelCountdown = false; duelGunTriggered = false; animationPlaying = false; return; }
                 currentAction?.stop();
                 currentAction = mixer.clipAction(layClip);
@@ -443,8 +438,8 @@ export const luckyLukeDemo: DemoHandler = {
                     if (!mixer) { return; }
                     currentAction?.stop();
                     currentAction = undefined;
-                }, 4000);
-            }, 4000);
+                }, 9000);
+            }, 5000);
         }
 
         // — Rig management —
@@ -771,8 +766,9 @@ export const luckyLukeDemo: DemoHandler = {
         function playNextIdleAnimation() {
             if (!mixer || clips.length === 0) return;
             let next = idleAnimIndex;
+            let excludeClips = ['Idle duel', 'Fall dead', 'Grab fun', 'Stand up', 'Walk']; // clips to exclude from random selection 
             if (clips.length > 1) {
-                while (next === idleAnimIndex) next = Math.floor(Math.random() * clips.length);
+                while (next === idleAnimIndex || excludeClips.includes(clips[next].name)) next = Math.floor(Math.random() * clips.length);
             } else {
                 next = 0;
             }
@@ -820,10 +816,10 @@ export const luckyLukeDemo: DemoHandler = {
             // duelMode = false : normal detection of the shadow & random idle animation if not detected
             // duelMode = true : countdown -> detect the duel pose to trigger the duel animation, ignore shadow detection and idle animations
 
-            if (frameCount++ > 30) {
-                console.log("update loop", { duelMode, duelCountdown, duelGunTriggered, animationPlaying });
-                frameCount = 0;
-            }
+            // if (frameCount++ > 30) {
+            //     console.log("update loop", { duelMode, duelCountdown, duelGunTriggered, animationPlaying });
+            //     frameCount = 0;
+            // }
 
             if (duelMode) {
                 
@@ -875,7 +871,7 @@ export const luckyLukeDemo: DemoHandler = {
                 if (modelRoot) {
                     const hip = tracker.poseTracker!.getNormalizedMarkPosition('hips' as any, _posA);
                     modelRoot.position.x = (hip.x - 0.5) * 2;
-                    modelRoot.position.y = (0.5 - hip.y) * 2; // invert so up = positive
+                    modelRoot.position.y = Math.max(-0.5, (0.5 - hip.y) * 2); // invert so up = positive
                 }
                 // updateGunGrab();
                 if (!duelMode) { detectDuelMode(); }

@@ -49,7 +49,7 @@ await Promise.all([renderer.init(), setupTracker(demo.trackerConfig)]).then(
  
 
         // — Lights —
-        // const ambient = new THREE.AmbientLight(0xffffff, 2.0);
+        // const ambient = new THREE.AmbientLight(0xffffff, 0.1);
         // scene.add(ambient);
 
         // const directional = new THREE.DirectionalLight(0xffffff, 2);
