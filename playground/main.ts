@@ -7,7 +7,7 @@ import { luckyLukeDemo } from "./lucky-luke-demo";
 const renderer = new THREE.WebGPURenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.toneMapping = THREE.NoToneMapping;
+ renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.5;
 document.body.appendChild(renderer.domElement);
 renderer.shadowMap.enabled = true;

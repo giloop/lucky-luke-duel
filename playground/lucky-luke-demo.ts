@@ -3,6 +3,7 @@ import {
     AnimationClip,
     AnimationMixer,
     LoopOnce,
+    LoopRepeat,
     AudioLoader,
     AxesHelper,
     BufferAttribute,
@@ -29,6 +30,7 @@ import {
     TextureLoader,
     Vector3,
     WebGPURenderer,
+    LoopPingPong,
 } from "three/webgpu";
 
 import { GLTFLoader, OrbitControls } from "three/examples/jsm/Addons.js";
@@ -38,7 +40,7 @@ import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
-const GRAB_THRESHOLD = 0.05; // world-unit proximity to trigger grab/release
+const GRAB_THRESHOLD = 0.15; // world-unit proximity to trigger grab/release
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const PROD_MODE = false;
 
@@ -102,13 +104,11 @@ export const luckyLukeDemo: DemoHandler = {
         const spotLightHelper = new SpotLightHelper( spotLight, 10 );
         scene.add( spotLightHelper );
         
-
-
         // Floor plane
         const floorMat = new MeshPhongMaterial( {
 					color: 0xffffff,
 					shininess: 150,
-					specular: 0x111111
+					specular: 0xffffff
 				} );
 		const floor = new Mesh( new PlaneGeometry( 10, 10 ), floorMat ); 
 		floor.rotation.x = - Math.PI / 2;
@@ -145,7 +145,7 @@ export const luckyLukeDemo: DemoHandler = {
         const progressFill = document.getElementById('loading-fill') as HTMLElement;
         const startBtn = document.getElementById('start-btn') as HTMLElement;
 
-        const TOTAL_ASSETS = 5;
+        const TOTAL_ASSETS = 7;
         let loadedCount = 0;
         const onAssetLoaded = () => {
             loadedCount++;
@@ -306,28 +306,31 @@ export const luckyLukeDemo: DemoHandler = {
         // new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "animations.glb")
         new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "animations.glb")
             .then((gltf) => {
-                clips = gltf.animations;
-                if (clips.length === 0) return;
-                animState.clip = clips[0].name;
-                animPanel.add(animState, "clip", clips.map((c) => c.name)).name("Animation");
+                clips.push(...gltf.animations);
+                if (gltf.animations.length === 0) return;
+                animState.clip = gltf.animations[0].name;
+                animPanel.add(animState, "clip", gltf.animations.map((c) => c.name)).name("Animation");
                 animPanel.add({ toggle: toggleAnimation }, "toggle").name("Play / Stop");
             })
             .catch((err) => console.warn("Could not load animations.glb:", err))
             .finally(onAssetLoaded);
 
+        new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "idle-duel.glb")
+            .then((gltf) => { clips.push(...gltf.animations); })
+            .catch((err) => console.warn("Could not load idle-duel.glb:", err))
+            .finally(onAssetLoaded);
+
         // — Audio —
 
-        let berimbauBuffer: AudioBuffer | undefined;
-        let berimbauPlaying = false;
         let audioCtx: AudioContext | undefined;
 
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Duel.mp3")
-            .then((buf) => { berimbauBuffer = buf; })
             .catch((err) => console.warn("Could not load Duel.mp3:", err))
             .finally(onAssetLoaded);
 
         let gunLoadBuffer: AudioBuffer | undefined;
         let gunReleaseBuffer: AudioBuffer | undefined;
+        let gunShotBuffer: AudioBuffer | undefined;
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunLoad.mp3")
             .then((buf) => { gunLoadBuffer = buf; })
             .catch((err) => console.warn("Could not load GunLoad.mp3:", err))
@@ -335,6 +338,10 @@ export const luckyLukeDemo: DemoHandler = {
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunRelease.mp3")
             .then((buf) => { gunReleaseBuffer = buf; })
             .catch((err) => console.warn("Could not load GunRelease.mp3:", err))
+            .finally(onAssetLoaded);
+        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Gunshot.mp3")
+            .then((buf) => { gunShotBuffer = buf; })
+            .catch((err) => console.warn("Could not load Gunshot.mp3:", err))
             .finally(onAssetLoaded);
 
         function playOneShot(buf: AudioBuffer | undefined) {
@@ -346,16 +353,98 @@ export const luckyLukeDemo: DemoHandler = {
             src.start(0);
         }
 
-        function playBerimbau() {
-            console.log("Play berimbau!");
-            if (!berimbauBuffer || berimbauPlaying) return;
-            if (!audioCtx) audioCtx = new AudioContext();
-            berimbauPlaying = true;
-            const source = audioCtx.createBufferSource();
-            source.buffer = berimbauBuffer;
-            source.connect(audioCtx.destination);
-            source.onended = () => { berimbauPlaying = false; };
-            source.start(0);
+        // — Duel state —
+        let duelMode = false; // true:Duel, false: Détection normale de l'ombre & animation random si pas détecté
+        let duelCountdown = false; // true: décompte en cours, false sinon
+        let duelGunTriggered = false; // true: le joueur a tiré pendant le duel après le décompte
+        let duelLayIdlePlaying = false; // true: la transition "Lay to Idle" est en cours de lecture après le tir du duel, avant de revenir à la détection normale
+
+        const duelCountdownEl = document.getElementById('duel-countdown') as HTMLElement;
+        const duelCountEl = document.getElementById('duel-count') as HTMLElement;
+
+        function startDuel() {
+            console.log("startDuel", { duelMode, duelCountdown, mixer });
+
+            if (duelMode || duelCountdown || !mixer) return; // ignore if already in duel mode, or if countdown is in progress, or if mixer is not ready
+            duelMode = true;
+            duelShootDetected = false;
+            duelCountdown = true;
+            duelGunTriggered = false;
+
+            const duelClip = clips.find(c => c.name === 'Recording-3');
+            if (!duelClip) {
+                console.warn("Could not find duel clip 'Recording-3' in", clips.map(c => c.name));
+                duelCountdown = false;
+                return; }
+
+            // Start duel animation and countdown
+            currentAction?.stop();
+            currentAction = mixer.clipAction(duelClip);
+            currentAction.setLoop(LoopPingPong, 5);
+            currentAction.reset().play();
+            animationPlaying = true;
+
+            let count = 5;
+            duelCountEl.textContent = String(count);
+            duelCountdownEl.style.display = 'flex';
+            
+            const tick = setInterval(() => {
+                count--;
+                if (count > 1) {
+                    duelCountEl.textContent = String(count);
+                } else {
+                    clearInterval(tick);
+                    duelCountEl.textContent = '1';
+                    setTimeout(() => {
+                        duelCountdownEl.style.display = 'none';
+                        duelCountdown = false;
+                    }, 400);
+
+                    console.log("Décompte terminé, attente du tir...");
+                }
+                
+            }, 1000);
+        }
+
+        function triggerDuelShot() {
+            // Pas de détection pendant le countdown, et pas de tir multiple pendant le duel
+            if (!duelMode || duelCountdown || duelGunTriggered || !mixer) return;
+            duelGunTriggered = true;
+            //duelMode = false;
+            //duelCountdown = true;
+
+            setTimeout(() => playOneShot(gunShotBuffer), 150);
+
+            const hitClip = clips.find(c => c.name === 'Hit_Knockback RT');
+            if (!hitClip) { duelCountdown = false; duelGunTriggered = false; return; }
+
+            currentAction?.stop();
+            currentAction = mixer.clipAction(hitClip);
+            currentAction.setLoop(LoopOnce, 1);
+            currentAction.clampWhenFinished = true;
+            currentAction.reset().play();
+            // animationPlaying = true;
+
+            setTimeout(() => {
+                if (!mixer) { duelCountdown = false; duelGunTriggered = false; return; }
+                const layClip = clips.find(c => c.name === 'LayToIdle RT');
+                if (!layClip) { duelCountdown = false; duelGunTriggered = false; animationPlaying = false; return; }
+                currentAction?.stop();
+                currentAction = mixer.clipAction(layClip);
+                currentAction.setLoop(LoopOnce, 1);
+                currentAction.clampWhenFinished = true;
+                currentAction.reset().play();
+                duelLayIdlePlaying = true;
+                // mixer "finished" handler finalises the sequence
+                setTimeout(() => {
+                    duelMode = false;
+                    duelCountdown = false;
+                    duelGunTriggered = false;
+                    if (!mixer) { return; }
+                    currentAction?.stop();
+                    currentAction = undefined;
+                }, 4000);
+            }, 4000);
         }
 
         // — Rig management —
@@ -372,7 +461,6 @@ export const luckyLukeDemo: DemoHandler = {
         let upperArmR: Object3D | undefined;
         let gunholdL: Object3D | undefined;
         let gunholdR: Object3D | undefined;
-        let eyeR: Object3D | undefined;
         let gunL: Object3D | undefined;
         let gunR: Object3D | undefined;
 
@@ -387,6 +475,9 @@ export const luckyLukeDemo: DemoHandler = {
         let gunLWasClose = false;
         let gunRHeld = false;
         let gunRWasClose = false;
+
+        // In duelMode, detect if the player has triggered a shot by bringing either hand close to its respective holster — rising edge only, must be reset by lowering hands after each shot
+        let duelShootDetected = false;
 
         // Hands-above-eye rising-edge state
         let handsAboveEyeWas = false;
@@ -424,7 +515,6 @@ export const luckyLukeDemo: DemoHandler = {
             upperArmR = root.getObjectByName("upper_armR");
             gunholdL  = root.getObjectByName("gunholdL");
             gunholdR  = root.getObjectByName("gunholdR");
-            eyeR      = root.getObjectByName("eyeR");
             gunL      = root.getObjectByName("Gun-L");
             gunR      = root.getObjectByName("Gun-R");
 
@@ -458,7 +548,9 @@ export const luckyLukeDemo: DemoHandler = {
             // Reset interaction state for the new rig
             gunLHeld = false; gunLWasClose = false;
             gunRHeld = false; gunRWasClose = false;
-            handsAboveEyeWas = false;
+            // Start true so the first detection frame can't accidentally fire startDuel —
+            // the user must lower their hands at least once before the rising edge triggers.
+            handsAboveEyeWas = true;
 
             disposeOld = () => {
                 debugAxesHelpers.forEach((h) => h.parent?.remove(h));
@@ -486,7 +578,7 @@ export const luckyLukeDemo: DemoHandler = {
                         (obj as SkinnedMesh).skeleton?.dispose();
                     }
                 });
-                handL = handR = forearmL = forearmR = upperArmL = upperArmR = gunholdL = gunholdR = eyeR = gunL = gunR = undefined;
+                handL = handR = forearmL = forearmR = upperArmL = upperArmR = gunholdL = gunholdR = gunL = gunR = undefined;
                 disposeOld = undefined;
             };
 
@@ -515,6 +607,14 @@ export const luckyLukeDemo: DemoHandler = {
             animationPlaying = false;
             mixer = new AnimationMixer(root);
             mixer.addEventListener("finished", () => {
+                if (duelLayIdlePlaying) {
+                    duelLayIdlePlaying = false;
+                    duelCountdown = false;
+                    animationPlaying = false;
+                    duelGunTriggered = false;
+                    if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
+                    return;
+                }
                 if (animationPlaying && !(tracker.poseTracker?.detected)) {
                     playNextIdleAnimation();
                 }
@@ -553,10 +653,10 @@ export const luckyLukeDemo: DemoHandler = {
                         gunL.rotation.x += 1;
                         gunL.rotation.y += 0;
                         gunL.rotation.z += 0.3;
-                        
                         playOneShot(gunLoadBuffer);
                         gunLHeld = true;
-                    } else {
+                        if (duelMode) triggerDuelShot();
+                    } else if (!duelMode) {
                         gunholdL.add(gunL);
                         gunL.position.copy(gunLRestPos);
                         gunL.quaternion.copy(gunLRestQuat);
@@ -583,10 +683,10 @@ export const luckyLukeDemo: DemoHandler = {
                         gunR.rotation.x += 1;
                         gunR.rotation.y += 0;
                         gunR.rotation.z += -0.3;
-                        
                         playOneShot(gunLoadBuffer);
                         gunRHeld = true;
-                    } else {
+                        if (duelMode) triggerDuelShot();
+                    } else if (!duelMode) {
                         gunholdR.add(gunR);
                         gunR.position.copy(gunRRestPos);
                         gunR.quaternion.copy(gunRRestQuat);
@@ -598,13 +698,56 @@ export const luckyLukeDemo: DemoHandler = {
             }
         }
 
-        function updateBerimbau() {
-            if (!eyeR || !handL || !handR) return;
-            eyeR.getWorldPosition(_posC);
-            handL.getWorldPosition(_posA);
-            handR.getWorldPosition(_posB);
-            const handsAbove = _posA.y > _posC.y && _posB.y > _posC.y;
-            if (handsAbove && !handsAboveEyeWas) playBerimbau();
+        function detectGunGrabDuel() {
+            if (duelShootDetected) return;
+            const pt = tracker.poseTracker;
+            if (!pt) return;
+
+            const dist2D = (a: Vector3, b: Vector3) =>
+                Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+
+            // Left: leftWrist approaching leftLeg (thigh / holster area)
+            pt.getNormalizedMarkPosition('leftWrist' as any, _posA);
+            pt.getNormalizedMarkPosition('leftLeg' as any, _posB);
+            {
+                const closeL = dist2D(_posA, _posB) < 0.05;
+                console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeL);
+                if (closeL && !gunLWasClose) {
+                    console.log('Shoot L detected !');
+                    duelShootDetected = true;
+                    triggerDuelShot();
+                    return;
+                }
+                gunLWasClose = closeL;
+            }
+
+            // Right: rightWrist approaching rightLeg (thigh / holster area)
+            pt.getNormalizedMarkPosition('rightWrist' as any, _posA);
+            pt.getNormalizedMarkPosition('rightLeg' as any, _posB);
+            {
+                const closeR = dist2D(_posA, _posB) < 0.05;
+                console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeR);
+                if (closeR && !gunRWasClose) {
+                    console.log('Shoot R detected !');
+                    duelShootDetected = true;
+                    triggerDuelShot();
+                    return;
+                }
+                gunRWasClose = closeR;
+            }
+
+        }
+
+        function detectDuelMode() {
+            if (duelMode || duelCountdown || !isFacingCamera()) return;
+            const pt = tracker.poseTracker;
+            if (!pt) return;
+            // normalized y: 0 = top of screen, 1 = bottom — "above head" means smaller y
+            const headPos = pt.getNormalizedMarkPosition('head' as any, _posC);
+            const lwPos = pt.getNormalizedMarkPosition('leftWrist' as any, _posA);
+            const rwPos = pt.getNormalizedMarkPosition('rightWrist' as any, _posB);
+            const handsAbove = lwPos.y < headPos.y - 0.1 && rwPos.y < headPos.y - 0.1; // false; //
+            if (handsAbove && !handsAboveEyeWas) startDuel();
             handsAboveEyeWas = handsAbove;
         }
 
@@ -642,6 +785,7 @@ export const luckyLukeDemo: DemoHandler = {
             animationPlaying = true;
         }
 
+
         function initGunsPosition() {
             // Set Guns initial position in the holster and parent them to the gunholds
             if (gunholdL && gunL) {
@@ -664,33 +808,77 @@ export const luckyLukeDemo: DemoHandler = {
 
         let wasDetected = false;
 
+        let frameCount = 0;
+
+        // — Main update loop —
         return (delta: number) => {
             ctrl.update();
 
             const detected = tracker.poseTracker?.detected ?? false;
 
-            if (!wasDetected && detected && animationPlaying) {
-                // Person re-detected — stop idle animation so tracking takes over
-                currentAction?.stop();
-                currentAction = undefined;
-                animationPlaying = false;
+            // Two modes : 
+            // duelMode = false : normal detection of the shadow & random idle animation if not detected
+            // duelMode = true : countdown -> detect the duel pose to trigger the duel animation, ignore shadow detection and idle animations
+
+            if (frameCount++ > 30) {
+                console.log("update loop", { duelMode, duelCountdown, duelGunTriggered, animationPlaying });
+                frameCount = 0;
             }
 
-            if (wasDetected && !detected) {
-                // Just lost detection — reset guns and start idle animation chain
-                if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
-                idleAnimIndex = -1;
-                playNextIdleAnimation();
-            }
+            if (duelMode) {
+                
+                // - Duel mode -
+                if (wasDetected && !detected) { 
+                    console.log("Lost detection — Cancel duelMode");
+                    duelMode = false;
+                    duelCountdown = false;
+                    duelGunTriggered = false;
+                    currentAction?.stop();
+                    currentAction = undefined;
+                    animationPlaying = false;
+                    if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
+                    idleAnimIndex = -1;
+                    playNextIdleAnimation();
+                }
 
+                // In duel mode : detect shoot after countdown
+                if (! (duelShootDetected || duelCountdown)) {
+                    detectGunGrabDuel();
+                }
+
+            } else { 
+                // - Normal mode -                
+                if (!wasDetected && detected && animationPlaying) {
+                    // Person re-detected — stop idle animation so tracking takes over
+                    currentAction?.stop();
+                    currentAction = undefined;
+                    animationPlaying = false;
+                }
+
+                if (wasDetected && !detected) {
+                    // Just lost detection — reset guns and start idle animation chain
+                    if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
+                    idleAnimIndex = -1;
+                    playNextIdleAnimation();
+                }
+            }
+            
+            // Update last detection state variable
             wasDetected = detected;
 
             if (animationPlaying && mixer) {
                 mixer.update(delta);
             } else if (detected) {
                 lukeBind?.update(delta);
-                updateGunGrab();
-                updateBerimbau();
+
+                 // position character horizontally to follow the detected person
+                if (modelRoot) {
+                    const hip = tracker.poseTracker!.getNormalizedMarkPosition('hips' as any, _posA);
+                    modelRoot.position.x = (hip.x - 0.5) * 2;
+                    modelRoot.position.y = (0.5 - hip.y) * 2; // invert so up = positive
+                }
+                // updateGunGrab();
+                if (!duelMode) { detectDuelMode(); }
             }
 
             if (debugBonesEnabled && tracker.poseTracker) {
