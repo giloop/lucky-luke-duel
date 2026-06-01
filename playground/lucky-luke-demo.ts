@@ -48,9 +48,10 @@ const USE_WEBCAM_BY_DEFAULT = true;
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
     trackerConfig: {
-        displayScale: 0.5,
+        displayScale: 1,
         ignoreFace: true,
         ignoreHands: true,
+        smoothLandmarks: true,
         debugVideo: import.meta.env.BASE_URL + "Lucky-luke.mp4",
     },
     setup: (

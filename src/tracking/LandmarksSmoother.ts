@@ -1,0 +1,77 @@
+/**
+ * This will remove the jitter and smooth the landmarks given by Mediapipe
+ * @author Yousuf Kalim
+ */
+
+type Landmarks = Array<{
+  x: number;
+  y: number;
+  z: number;
+  visibility: number;
+}>;
+
+export interface Results {
+  poseLandmarks: Landmarks;
+}
+
+const frameSets: Landmarks[] = [];
+const smoothFrame: Landmarks = [];
+
+/**
+ * smoothLandmarks
+ * @param {Object} results This should be coming directly from Mediapipe
+ * @param {Function} onResults Optional: If you want to call other function instead of getting return
+ * @returns {Object}
+ */
+const smoothLandmarks = (
+  results: Results,
+  onResults?: (results: Results) => void,
+): Results | void => {
+  // Pushing frame at the end of frameSet array
+  if (results.poseLandmarks) {
+    frameSets.push(results.poseLandmarks);
+  }
+
+  if (frameSets.length === 4) {
+    // This loop will run 33 time to make average of each joint
+    for (let i = 0; i < 33; i++) {
+      // Making an array of each joint coordinates
+      let x = frameSets.map((a) => a[i].x);
+      let y = frameSets.map((a) => a[i].y);
+      let z = frameSets.map((a) => a[i].z);
+      let visibility = frameSets.map((a) => a[i].visibility);
+
+      // Sorting the array into ascending order
+      x = x.sort((a, b) => a - b);
+      y = y.sort((a, b) => a - b);
+      z = z.sort((a, b) => a - b);
+      visibility = visibility.sort((a, b) => a - b);
+
+      // Dropping 1 min and 1 max coordinates
+      x = x.slice(1, 3);
+      y = y.slice(1, 3);
+      z = z.slice(1, 3);
+      visibility = visibility.slice(1, 3);
+
+      // Making the average of 4 remaining coordinates
+      smoothFrame[i] = {
+        x: x.reduce((a, b) => a + b, 0) / x.length,
+        y: y.reduce((a, b) => a + b, 0) / y.length,
+        z: z.reduce((a, b) => a + b, 0) / z.length,
+        visibility: visibility.reduce((a, b) => a + b, 0) / visibility.length,
+      };
+    }
+
+    // Removing the first frame from frameSet
+    frameSets.shift();
+  }
+
+  // after first 8 frames we have averaged coordinates, So now updating the poseLandmarks with averaged coordinates
+  if (smoothFrame.length > 0) {
+    results.poseLandmarks = smoothFrame;
+  }
+
+  return onResults ? onResults(results) : results;
+};
+
+export default smoothLandmarks;

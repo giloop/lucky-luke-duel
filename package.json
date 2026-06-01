@@ -30,13 +30,13 @@
     "preview": "vite preview --config vite.dev.config.ts"
   },
   "devDependencies": {
+    "@tweenjs/tween.js": "^25.0.0",
     "@types/node": "^25.3.3",
     "@types/three": "^0.183.1",
     "path": "^0.12.7",
     "typescript": "~5.7.2",
     "vite": "^6.1.0",
-    "vite-plugin-dts": "^4.5.4",
-	"@tweenjs/tween.js": "^25.0.0"
+    "vite-plugin-dts": "^4.5.4"
   },
   "peerDependencies": {
     "@mediapipe/tasks-vision": "^0.10.32",

@@ -4,6 +4,7 @@ import {
     PoseLandmarker,
     PoseLandmarkerResult,
 } from "@mediapipe/tasks-vision";
+import smoothLandmarks from "./LandmarksSmoother";
 import * as THREE from "three/webgpu";
 import { lookAt, LookAtPoleAxis } from "./util/lookAt";
 import { Tracker } from "./Tracker";
@@ -80,6 +81,7 @@ type PoseTrackerConfig = {
 	ignoreLegs:boolean
 	modelPath:string
 	drawLandmarks?:boolean
+	smooth?:boolean
 }
 
 /**
@@ -131,12 +133,18 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 			}
 
 			this.detected = true;
-			this.updateLandmarks( result.worldLandmarks[0], this.config?.drawLandmarks===false ? undefined : result.landmarks[0], drawingUtils );
-			this.updateNormalizedLandmarks( result.landmarks[0] );
 
-			
-			this._leftWristNormalizedPosition = result.landmarks[0][ this.points.leftWrist ];
-			this._rightWristNormalizedPosition = result.landmarks[0][ this.points.rightWrist ];
+			let landmarks = result.landmarks[0];
+			if (this.config?.smooth) {
+				const smoothed = (smoothLandmarks as any)({ poseLandmarks: landmarks });
+				if (smoothed?.poseLandmarks) landmarks = smoothed.poseLandmarks;
+			}
+
+			this.updateLandmarks( result.worldLandmarks[0], this.config?.drawLandmarks===false ? undefined : landmarks, drawingUtils );
+			this.updateNormalizedLandmarks( landmarks );
+
+			this._leftWristNormalizedPosition = landmarks[ this.points.leftWrist ];
+			this._rightWristNormalizedPosition = landmarks[ this.points.rightWrist ];
 		} );
 	}
 

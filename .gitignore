@@ -12,4 +12,5 @@ notes*
 models/*.task
 models/*.pdf
 public/test*.*
-Todo-Preprompt-Claude.txt
+Todo-Preprompt-Claude.md
+Lucky-Luke-simplified3*.glb

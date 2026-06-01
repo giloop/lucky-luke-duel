@@ -63,6 +63,12 @@ export type TrackerConfig = {
 	 * Draw the wireframe landmarks on top of the source image/video? ( default to true )
 	 */
 	drawLandmarksOverlay?:boolean
+
+	/**
+	 * Smooth pose landmarks using a rolling-average filter (mediapipe-pose-smooth).
+	 * Reduces jitter at the cost of slight latency. Default: false.
+	 */
+	smoothLandmarks?:boolean
 };
 
 export interface BindingHandler {
@@ -124,6 +130,7 @@ export async function setupTracker(config?: Partial<TrackerConfig>) : Promise<Tr
         ignoreLegs: $cfg.ignoreLegs,
 		modelPath: $cfg.modelPaths.pose!,
 		drawLandmarks: $cfg.drawLandmarksOverlay,
+		smooth: $cfg.smoothLandmarks,
     });
     const handsTracker = ($cfg.onlyFace || $cfg.ignoreHands) ? undefined : await loadHandTracker(vision, {
         leftWrist: () => poseTracker!.leftWristNormalizedPosition,
