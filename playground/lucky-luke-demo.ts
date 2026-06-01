@@ -14,14 +14,12 @@ import {
     DirectionalLight,
     DirectionalLightHelper,
     Material,
-    Matrix4,
     Mesh,
     MeshLambertMaterial,
     MeshPhongMaterial,
     Object3D,
     PerspectiveCamera,
     PlaneGeometry,
-    Quaternion,
     Scene,
     SkinnedMesh,
     SpotLight,
@@ -40,9 +38,10 @@ import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
-const GRAB_THRESHOLD = 0.15; // world-unit proximity to trigger grab/release
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
+const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
+const WRIST_ABOVE_ELBOW_DISTANCE = 0.05; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
 const USE_WEBCAM_BY_DEFAULT = true;
 
 export const luckyLukeDemo: DemoHandler = {
@@ -152,7 +151,7 @@ export const luckyLukeDemo: DemoHandler = {
         const progressFill = document.getElementById('loading-fill') as HTMLElement;
         const startBtn = document.getElementById('start-btn') as HTMLElement;
 
-        const TOTAL_ASSETS = 6; // 7; 
+        const TOTAL_ASSETS = 4; // animations.glb + Duel.mp3 + Gunshot.mp3 + model
         let loadedCount = 0;
         const onAssetLoaded = () => {
             loadedCount++;
@@ -330,17 +329,7 @@ export const luckyLukeDemo: DemoHandler = {
             .catch((err) => console.warn("Could not load Duel.mp3:", err))
             .finally(onAssetLoaded);
 
-        let gunLoadBuffer: AudioBuffer | undefined;
-        let gunReleaseBuffer: AudioBuffer | undefined;
         let gunShotBuffer: AudioBuffer | undefined;
-        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunLoad.mp3")
-            .then((buf) => { gunLoadBuffer = buf; })
-            .catch((err) => console.warn("Could not load GunLoad.mp3:", err))
-            .finally(onAssetLoaded);
-        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "GunRelease.mp3")
-            .then((buf) => { gunReleaseBuffer = buf; })
-            .catch((err) => console.warn("Could not load GunRelease.mp3:", err))
-            .finally(onAssetLoaded);
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Gunshot.mp3")
             .then((buf) => { gunShotBuffer = buf; })
             .catch((err) => console.warn("Could not load Gunshot.mp3:", err))
@@ -370,12 +359,14 @@ export const luckyLukeDemo: DemoHandler = {
             if (duelMode || duelCountdown || !mixer) return; // ignore if already in duel mode, or if countdown is in progress, or if mixer is not ready
             duelMode = true;
             duelShootDetected = false;
+            duelGunGrabbedL = false;
+            duelGunGrabbedR = false;
             duelCountdown = true;
             duelGunTriggered = false;
 
-            const duelClip = clips.find(c => c.name === 'Idle duel');
+            const duelClip = clips.find(c => c.name === 'duel-idle');
             if (!duelClip) {
-                console.warn("Could not find duel clip 'Idle duel' in", clips.map(c => c.name));
+                console.warn("Could not find duel clip 'duel-idle' in", clips.map(c => c.name));
                 duelCountdown = false;
                 return; }
 
@@ -415,9 +406,10 @@ export const luckyLukeDemo: DemoHandler = {
             //duelMode = false;
             //duelCountdown = true;
 
-            setTimeout(() => playOneShot(gunShotBuffer), 150);
+            playOneShot(gunShotBuffer)
+            // setTimeout(() => playOneShot(gunShotBuffer), 150);
 
-            const hitClip = clips.find(c => c.name === 'Fall dead');
+            const hitClip = clips.find(c => c.name === 'Falling Back Death');
             if (!hitClip) { duelCountdown = false; duelGunTriggered = false; return; }
 
             currentAction?.stop();
@@ -429,7 +421,7 @@ export const luckyLukeDemo: DemoHandler = {
 
             setTimeout(() => {
                 if (!mixer) { duelCountdown = false; duelGunTriggered = false; return; }
-                const layClip = clips.find(c => c.name === 'Stand up');
+                const layClip = clips.find(c => c.name === 'Getting Up');
                 if (!layClip) { duelCountdown = false; duelGunTriggered = false; animationPlaying = false; return; }
                 currentAction?.stop();
                 currentAction = mixer.clipAction(layClip);
@@ -454,32 +446,18 @@ export const luckyLukeDemo: DemoHandler = {
         let lukeBind: RecordableBindingHandler | undefined;
         let disposeOld: (() => void) | undefined;
 
-        // Bone / mesh references — reset each time a new rig is loaded
-        let handL: Object3D | undefined;
-        let handR: Object3D | undefined;
-        let forearmL: Object3D | undefined;
-        let forearmR: Object3D | undefined;
+        // Upper arm bones — needed by isFacingCamera()
         let upperArmL: Object3D | undefined;
         let upperArmR: Object3D | undefined;
-        let gunholdL: Object3D | undefined;
-        let gunholdR: Object3D | undefined;
-        let gunL: Object3D | undefined;
-        let gunR: Object3D | undefined;
 
-        // Initial local transforms of the guns in their holsters (restored on release)
-        let gunLRestPos = new Vector3();
-        let gunLRestQuat = new Quaternion();
-        let gunRRestPos = new Vector3();
-        let gunRRestQuat = new Quaternion();
-
-        // Gun grab state — rising-edge toggle per gun
-        let gunLHeld = false;
+        // Rising-edge flags for duel gun-grab detection
         let gunLWasClose = false;
-        let gunRHeld = false;
         let gunRWasClose = false;
 
-        // In duelMode, detect if the player has triggered a shot by bringing either hand close to its respective holster — rising edge only, must be reset by lowering hands after each shot
-        let duelShootDetected = false;
+        // In duelMode, detect if the player has triggered a shot — rising edge only        
+        let duelGunGrabbedL = false; // 1: Grab gun at hip level,
+        let duelGunGrabbedR = false; // 1: Grab gun at hip level,
+        let duelShootDetected = false; // 2: Raised hand after grab (to prevent accidental shoot detection while just putting hand on holster)
 
         // Hands-above-eye rising-edge state
         let handsAboveEyeWas = false;
@@ -508,49 +486,13 @@ export const luckyLukeDemo: DemoHandler = {
 
             modelRoot = root;
             scene.add(root);
-            
-            // Resolve bones & mesh objects by their Blender-exported names
-            handL     = root.getObjectByName("handL");
-            handR     = root.getObjectByName("handR");
-            forearmL  = root.getObjectByName("forearmL");
-            forearmR  = root.getObjectByName("forearmR");
+
             upperArmL = root.getObjectByName("upper_armL");
             upperArmR = root.getObjectByName("upper_armR");
-            gunholdL  = root.getObjectByName("gunholdL");
-            gunholdR  = root.getObjectByName("gunholdR");
-            gunL      = root.getObjectByName("Gun-L");
-            gunR      = root.getObjectByName("Gun-R");
 
-            // Compute all gun local transforms from raw GLB world matrices
-            root.updateMatrixWorld(true);
-            const _m = new Matrix4();
-            const _s = new Vector3();
-            if (gunL && gunholdL) {
-                _m.copy(gunholdL.matrixWorld).invert().multiply(gunL.matrixWorld);
-                _m.decompose(gunLRestPos, gunLRestQuat, _s);
-            }
-            if (gunR && gunholdR) {
-                _m.copy(gunholdR.matrixWorld).invert().multiply(gunR.matrixWorld);
-                _m.decompose(gunRRestPos, gunRRestQuat, _s);
-            }
-
-            if (gunL && gunholdL && gunR && gunholdR) {
-                initGunsPosition();
-            }
-            // Rebuild debug axes helpers for the new rig (hidden by default)
-            debugAxesHelpers.forEach((h) => h.parent?.remove(h));
-            debugAxesHelpers.length = 0;
-            for (const bone of [handL, handR, gunL, gunR]) {
-                if (!bone) continue;
-                const h = new AxesHelper(0.2);
-                h.visible = false;
-                bone.add(h);
-                debugAxesHelpers.push(h);
-            }
-
-            // Reset interaction state for the new rig
-            gunLHeld = false; gunLWasClose = false;
-            gunRHeld = false; gunRWasClose = false;
+            // Reset duel detection rising-edge state for the new rig
+            gunLWasClose = false;
+            gunRWasClose = false;
             // Start true so the first detection frame can't accidentally fire startDuel —
             // the user must lower their hands at least once before the rising edge triggers.
             handsAboveEyeWas = true;
@@ -581,7 +523,6 @@ export const luckyLukeDemo: DemoHandler = {
                         (obj as SkinnedMesh).skeleton?.dispose();
                     }
                 });
-                handL = handR = forearmL = forearmR = upperArmL = upperArmR = gunholdL = gunholdR = gunL = gunR = undefined;
                 disposeOld = undefined;
             };
 
@@ -615,7 +556,6 @@ export const luckyLukeDemo: DemoHandler = {
                     duelCountdown = false;
                     animationPlaying = false;
                     duelGunTriggered = false;
-                    if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
                     return;
                 }
                 if (animationPlaying && !(tracker.poseTracker?.detected)) {
@@ -624,81 +564,11 @@ export const luckyLukeDemo: DemoHandler = {
             });
         }
 
-        // Returns true when the character is facing the camera:
-        // both upper-arm bones lie on roughly the same Z plane (XY-aligned).
         function isFacingCamera(): boolean {
             if (!upperArmL || !upperArmR) return false;
             upperArmL.getWorldPosition(_posA);
             upperArmR.getWorldPosition(_posB);
             return Math.abs(_posA.z - _posB.z) < 0.05;
-        }
-
-        function updateGunGrab() {
-            if (!isFacingCamera()) return;
-
-            // XY-only distance helper (ignores Z depth)
-            const dist2D = (a: Vector3, b: Vector3) =>
-                Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-
-            // Left gun: handL ↔ gunholdL
-            if (handL && gunholdL && gunL) {
-                handL.getWorldPosition(_posA);
-                gunholdL.getWorldPosition(_posB);
-                const closeL = dist2D(_posA, _posB) < GRAB_THRESHOLD;
-                if (closeL && !gunLWasClose) {
-                    scene.updateMatrixWorld(true);
-                    if (!gunLHeld) {
-                        const grabParentL = forearmL ?? handL;
-                        grabParentL.attach(gunL);
-                        handL.getWorldPosition(_posA);
-                        grabParentL.worldToLocal(_posA);
-                        gunL.position.set(_posA.x-0.02, _posA.y+0.05, _posA.z+0);
-                        gunL.rotation.x += 1;
-                        gunL.rotation.y += 0;
-                        gunL.rotation.z += 0.3;
-                        playOneShot(gunLoadBuffer);
-                        gunLHeld = true;
-                        if (duelMode) triggerDuelShot();
-                    } else if (!duelMode) {
-                        gunholdL.add(gunL);
-                        gunL.position.copy(gunLRestPos);
-                        gunL.quaternion.copy(gunLRestQuat);
-                        playOneShot(gunReleaseBuffer);
-                        gunLHeld = false;
-                    }
-                }
-                gunLWasClose = closeL;
-            }
-
-            // Right gun: handR ↔ gunholdR
-            if (handR && gunholdR && gunR) {
-                handR.getWorldPosition(_posA);
-                gunholdR.getWorldPosition(_posB);
-                const closeR = dist2D(_posA, _posB) < GRAB_THRESHOLD;
-                if (closeR && !gunRWasClose) {
-                    scene.updateMatrixWorld(true);
-                    if (!gunRHeld) {
-                        const grabParentR = forearmR ?? handR;
-                        grabParentR.attach(gunR);
-                        handR.getWorldPosition(_posA);
-                        grabParentR.worldToLocal(_posA);
-                        gunR.position.set(_posA.x, _posA.y+0.05, _posA.z+0);
-                        gunR.rotation.x += 1;
-                        gunR.rotation.y += 0;
-                        gunR.rotation.z += -0.3;
-                        playOneShot(gunLoadBuffer);
-                        gunRHeld = true;
-                        if (duelMode) triggerDuelShot();
-                    } else if (!duelMode) {
-                        gunholdR.add(gunR);
-                        gunR.position.copy(gunRRestPos);
-                        gunR.quaternion.copy(gunRRestQuat);
-                        playOneShot(gunReleaseBuffer);
-                        gunRHeld = false;
-                    }
-                }
-                gunRWasClose = closeR;
-            }
         }
 
         function detectGunGrabDuel() {
@@ -712,13 +582,27 @@ export const luckyLukeDemo: DemoHandler = {
             // Left: leftWrist approaching leftLeg (thigh / holster area)
             pt.getNormalizedMarkPosition('leftWrist' as any, _posA);
             pt.getNormalizedMarkPosition('leftLeg' as any, _posB);
+            pt.getNormalizedMarkPosition('leftElbow' as any, _posC);
+            
+            if (duelGunGrabbedL)
             {
-                const closeL = dist2D(_posA, _posB) < 0.05;
-                console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeL);
+                // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow) to trigger the shot   
+                const closeL = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
+                console.log('Left wrist / elbow:', Math.abs(_posA.y - _posC.y).toFixed(3), '— close:', closeL);
                 if (closeL && !gunLWasClose) {
                     console.log('Shoot L detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
+                    return;
+                }
+                gunLWasClose = closeL;
+            } else {
+                // Step 1 : detect grab (wrist close to leg)
+                const closeL = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
+                console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeL);
+                if (closeL && !gunLWasClose) {
+                    console.log('Gun L grabbed !');
+                    duelGunGrabbedL = true;
                     return;
                 }
                 gunLWasClose = closeL;
@@ -727,13 +611,27 @@ export const luckyLukeDemo: DemoHandler = {
             // Right: rightWrist approaching rightLeg (thigh / holster area)
             pt.getNormalizedMarkPosition('rightWrist' as any, _posA);
             pt.getNormalizedMarkPosition('rightLeg' as any, _posB);
+            pt.getNormalizedMarkPosition('rightElbow' as any, _posC);
+            
+            if (duelGunGrabbedR)
             {
-                const closeR = dist2D(_posA, _posB) < 0.05;
-                console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeR);
-                if (closeR && !gunRWasClose) {
+                // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow) to trigger the shot   
+                const closeR = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
+                console.log('Right wrist / elbow:', Math.abs(_posA.y - _posC.y).toFixed(3), '— close:', closeR);
+                if (closeR  && !gunRWasClose) {
                     console.log('Shoot R detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
+                    return;
+                }
+                gunRWasClose = closeR;
+            } else {
+                // Step 1 : detect grab (wrist close to leg)
+                const closeR = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
+                console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeR);
+                if (closeR && !gunRWasClose) {
+                    console.log('Gun R grabbed !');
+                    duelGunGrabbedR = true;
                     return;
                 }
                 gunRWasClose = closeR;
@@ -774,7 +672,7 @@ export const luckyLukeDemo: DemoHandler = {
         function playNextIdleAnimation() {
             if (!mixer || clips.length === 0) return;
             let next = idleAnimIndex === -1 ? clips.map(el => el.name).indexOf("Jump 2") : idleAnimIndex; // idleAnimIndex;
-            let excludeClips = ['Idle duel', 'Fall dead', 'Grab fun', 'Stand up', 'Walk']; // clips to exclude from random selection 
+            let excludeClips = ['duel-idle', 'Falling Back Death', 'Getting Up']; // clips to exclude from random selection 
             if (clips.length > 1) {
                 while (next === idleAnimIndex || excludeClips.includes(clips[next].name)) next = Math.floor(Math.random() * clips.length);
             } else {
@@ -800,21 +698,6 @@ export const luckyLukeDemo: DemoHandler = {
             }
         }
 
-        function initGunsPosition() {
-            // Set Guns initial position in the holster and parent them to the gunholds
-            if (gunholdL && gunL) {
-                gunholdL.add(gunL);
-                gunL.position.copy(gunLRestPos);
-                gunL.quaternion.copy(gunLRestQuat);
-                gunLHeld = false;
-            }
-            if (gunholdR && gunR) {
-                gunholdR.add(gunR);
-                gunR.position.copy(gunRRestPos);
-                gunR.quaternion.copy(gunRRestQuat);
-                gunRHeld = false;
-            }
-        }
 
 
 
@@ -840,18 +723,32 @@ export const luckyLukeDemo: DemoHandler = {
             // }
 
             if (duelMode) {
-                
+
                 // - Duel mode -
-                if (wasDetected && !detected) { 
+                if (wasDetected && !detected) {
                     console.log("Lost detection — Cancel duelMode");
                     duelMode = false;
                     duelCountdown = false;
                     duelGunTriggered = false;
+                    duelShootDetected = false;
+                    duelGunGrabbedL = false;
+                    duelGunGrabbedR = false;
                     currentAction?.stop();
                     currentAction = undefined;
                     animationPlaying = false;
-                    if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
                     idleAnimIndex = -1;
+                    playNextIdleAnimation();
+                }
+
+                // Safety catch: animation ended while nobody was there (e.g. after the
+                // duelLayIdlePlaying "finished" handler set animationPlaying = false)
+                if (!detected && !animationPlaying) {
+                    duelMode = false;
+                    duelCountdown = false;
+                    duelGunTriggered = false;
+                    duelShootDetected = false;
+                    duelGunGrabbedL = false;
+                    duelGunGrabbedR = false;idleAnimIndex = -1;
                     playNextIdleAnimation();
                 }
 
@@ -870,8 +767,6 @@ export const luckyLukeDemo: DemoHandler = {
                 }
 
                 if (wasDetected && !detected) {
-                    // Just lost detection — reset guns and start idle animation chain
-                    if (gunL && gunholdL && gunR && gunholdR) initGunsPosition();
                     idleAnimIndex = -1;
                     playNextIdleAnimation();
                 }
