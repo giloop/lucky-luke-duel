@@ -141,7 +141,7 @@ export const luckyLukeDemo: DemoHandler = {
             });
         }
 
-        const applyProdMode = (on: boolean) => {
+        const applyDebugMode = (on: boolean) => {
             (inspector.domElement as HTMLElement).style.display = on ? '' : 'none';
             (tracker.domElement as HTMLElement).style.display = on ? '' : 'none';
         };
@@ -165,8 +165,8 @@ export const luckyLukeDemo: DemoHandler = {
         // — Production mode checkbox —
         const prodCheckbox = document.getElementById('prod-checkbox') as HTMLInputElement;
         prodCheckbox.checked = DEBUG_MODE;
-        prodCheckbox.addEventListener('change', () => applyProdMode(prodCheckbox.checked));
-        if (DEBUG_MODE) applyProdMode(false);
+        prodCheckbox.addEventListener('change', () => applyDebugMode(prodCheckbox.checked));
+        applyDebugMode(DEBUG_MODE);
 
         const actions = {
             inputWebcam: () => {
@@ -415,51 +415,54 @@ export const luckyLukeDemo: DemoHandler = {
             // Pas de détection pendant le countdown, et pas de tir multiple pendant le duel
             if (!duelMode || duelCountdown || duelGunTriggered || !mixer) return;
             duelGunTriggered = true;
-            //duelMode = false;
-            //duelCountdown = true;
-            duelLayIdlePlaying = true;
 
-            playOneShot(gunShotBuffer)
-            
-            console.log("Tir déclenché, lecture de l'animation de chute...");
+            playOneShot(gunShotBuffer);            
+            // console.log("Tir déclenché, lecture de l'animation de chute...");
 
             const hitClip = clips.find(c => c.name === 'Falling Back Death');
-            if (!hitClip) { duelCountdown = false; duelGunTriggered = false; return; }
+            if (!hitClip) { duelGunTriggered = false; return; }
 
+            // Start "Falling Back Death"
             currentAction?.stop();
             currentAction = mixer.clipAction(hitClip);
             currentAction.setLoop(LoopOnce, 1);
             currentAction.clampWhenFinished = true;
             currentAction.reset().play();
-            // animationPlaying = true;
-            
 
-            // Sequence de fin
-            setTimeout(() => {
+            // When "Falling Back Death" ends, chain into "Getting Up"
+            const onFallFinished = (e: { action: AnimationAction }) => {
+                if (e.action !== currentAction) return;
+                mixer!.removeEventListener('finished', onFallFinished);
 
-                if (!mixer) { duelCountdown = false; duelGunTriggered = false; return; }
                 const layClip = clips.find(c => c.name === 'Getting Up');
-                if (!layClip) { duelCountdown = false; duelGunTriggered = false; animationPlaying = false; return; }
+                if (!layClip || !mixer) { duelGunTriggered = false; return; }
+
+                // console.log("finie ... lecture animation de relevé...");
                 currentAction?.stop();
                 currentAction = mixer.clipAction(layClip);
                 currentAction.setLoop(LoopOnce, 1);
-                currentAction.clampWhenFinished = false;
+                currentAction.clampWhenFinished = true;
                 currentAction.reset().play();
-               
-                console.log("Timeout 1 over, lecture de l'animation Getting Up...");
-                
-                // mixer "finished" handler finalises the sequence
-                setTimeout(() => {
-                    console.log("Timeout 2 over, reset de l'état");
+                duelLayIdlePlaying = true;
+
+
+                const onGetUpFinished = (e: { action: AnimationAction }) => {
+                    if (e.action !== currentAction) return;
+                    mixer!.removeEventListener('finished', onGetUpFinished);
+
+                    // console.log("finie ... reset state du duel...");
+                    
                     duelMode = false;
                     duelCountdown = false;
                     duelGunTriggered = false;
                     duelLayIdlePlaying = false;
-                    //wasDetected = false;
-                    //animationPlaying = false;
-                    
-                }, 4000);
-            }, 4000);
+                }
+                
+                mixer.addEventListener('finished', onGetUpFinished);
+
+            };    
+
+            mixer.addEventListener('finished', onFallFinished);
         }
 
         // — Rig management —
