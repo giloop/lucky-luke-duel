@@ -40,7 +40,7 @@ import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
-const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
+const GUN_GRAB_DISTANCE = 0.065; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
 const WRIST_ABOVE_ELBOW_DISTANCE = 0.05; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
 const USE_WEBCAM_BY_DEFAULT = true;
 
@@ -142,8 +142,8 @@ export const luckyLukeDemo: DemoHandler = {
         }
 
         const applyProdMode = (on: boolean) => {
-            (inspector.domElement as HTMLElement).style.display = on ? 'none' : '';
-            (tracker.domElement as HTMLElement).style.display = on ? 'none' : '';
+            (inspector.domElement as HTMLElement).style.display = on ? '' : 'none';
+            (tracker.domElement as HTMLElement).style.display = on ? '' : 'none';
         };
 
         // — Loading overlay —
@@ -307,6 +307,8 @@ export const luckyLukeDemo: DemoHandler = {
         let currentAction: AnimationAction | undefined;
         let animationPlaying = false;
         const animState = { clip: "" };
+        let clipsPlaylist: string[] = [];
+        const excludedClipsFromPlaylist = ['Jump 2', 'duel-idle', 'Falling Back Death', 'Getting Up'];
 
         const animPanel = inspector.createParameters("Animations");
        
@@ -317,10 +319,19 @@ export const luckyLukeDemo: DemoHandler = {
                 animState.clip = gltf.animations[0].name;
                 animPanel.add(animState, "clip", gltf.animations.map((c) => c.name)).name("Animation");
                 animPanel.add({ toggle: toggleAnimation }, "toggle").name("Play / Stop");
+                clipsPlaylist = [... gltf.animations.map((c) => c.name)];
+                clipsPlaylist = clipsPlaylist.filter((clip) => !excludedClipsFromPlaylist.includes(clip));
             })
             .catch((err) => console.warn("Could not load animations.glb:", err))
             .finally(onAssetLoaded);
         
+
+        function shufflePlaylist() {
+            clipsPlaylist = clipsPlaylist.map(value => ({ value, sort: Math.random() }))
+                                         .sort((a, b) => a.sort - b.sort)
+                                         .map(({ value }) => value);
+        }
+
         // — Audio —
 
         let audioCtx: AudioContext | undefined;
@@ -370,8 +381,8 @@ export const luckyLukeDemo: DemoHandler = {
                 duelCountdown = false;
                 return; }
 
-            // Start duel animation and countdown
-            currentAction?.stop();
+            // Start duel animation and countdown — stop all to clear any ongoing crossfade
+            mixer.stopAllAction();
             currentAction = mixer.clipAction(duelClip);
             currentAction.setLoop(LoopPingPong, 5);
             currentAction.reset().play();
@@ -387,7 +398,7 @@ export const luckyLukeDemo: DemoHandler = {
                     duelCountEl.textContent = String(count);
                 } else {
                     clearInterval(tick);
-                    duelCountEl.textContent = '1';
+                    duelCountEl.textContent = 'Shoot !';
                     setTimeout(() => {
                         duelCountdownEl.style.display = 'none';
                         duelCountdown = false;
@@ -669,21 +680,42 @@ export const luckyLukeDemo: DemoHandler = {
 
         let idleAnimIndex = -1;
 
+        const IDLE_CROSSFADE_DURATION = 1; // seconds
+
         function playNextIdleAnimation() {
             if (!mixer || clips.length === 0) return;
-            let next = idleAnimIndex === -1 ? clips.map(el => el.name).indexOf("Jump 2") : idleAnimIndex; // idleAnimIndex;
-            let excludeClips = ['duel-idle', 'Falling Back Death', 'Getting Up']; // clips to exclude from random selection 
+            let next = idleAnimIndex === -1 ? clips.map(el => el.name).indexOf("Jump 2") : idleAnimIndex;
+            const excludeClips = ['duel-idle', 'Falling Back Death', 'Getting Up'];
             if (clips.length > 1) {
                 while (next === idleAnimIndex || excludeClips.includes(clips[next].name)) next = Math.floor(Math.random() * clips.length);
             } else {
                 next = 0;
             }
             idleAnimIndex = next;
-            currentAction?.stop();
+
+            const prevAction = currentAction;
             currentAction = mixer.clipAction(clips[next]);
+
+            // reset() clears stale timeScale/weight fades left by a previous crossFadeTo,
+            // preventing timeScale from cascading toward 0 across iterations.
+            currentAction.reset();
             currentAction.setLoop(LoopOnce, 1);
             currentAction.clampWhenFinished = true;
-            currentAction.reset().play();
+
+            console.log("Playing idle animation:", clips[next].name);
+
+            if (prevAction) {
+                // warping:false avoids modifying timeScale on either action —
+                // warping was the root cause of the freeze after ~6 iterations.
+                prevAction.crossFadeTo(currentAction, IDLE_CROSSFADE_DURATION, false);
+                // Stop the outgoing action once the blend finishes so it doesn't
+                // accumulate as a zombie in the mixer.
+                const toStop = prevAction;
+                setTimeout(() => toStop.stop(), IDLE_CROSSFADE_DURATION * 1000);
+            } else {
+                currentAction.fadeIn(IDLE_CROSSFADE_DURATION);
+            }
+            currentAction.play();
             animationPlaying = true;
         }
 
@@ -694,11 +726,9 @@ export const luckyLukeDemo: DemoHandler = {
             if (distance > 0.025) { // Threshold to prevent jitter
                 direction.normalize(); // Normalize the direction vector
                 const movement = direction.multiplyScalar(0.025); // Calculate movement
-                modelRoot.position.add(movement); // Update character position
+                modelRoot?.position.add(movement); // Update character position
             }
         }
-
-
 
 
         new GLTFLoader().load(DEFAULT_MODEL, (gltf) => { setActiveRig(gltf); onAssetLoaded(); });
@@ -733,7 +763,7 @@ export const luckyLukeDemo: DemoHandler = {
                     duelShootDetected = false;
                     duelGunGrabbedL = false;
                     duelGunGrabbedR = false;
-                    currentAction?.stop();
+                    mixer?.stopAllAction();
                     currentAction = undefined;
                     animationPlaying = false;
                     idleAnimIndex = -1;
@@ -748,7 +778,8 @@ export const luckyLukeDemo: DemoHandler = {
                     duelGunTriggered = false;
                     duelShootDetected = false;
                     duelGunGrabbedL = false;
-                    duelGunGrabbedR = false;idleAnimIndex = -1;
+                    duelGunGrabbedR = false;
+                    idleAnimIndex = -1;
                     playNextIdleAnimation();
                 }
 
@@ -761,7 +792,7 @@ export const luckyLukeDemo: DemoHandler = {
                 // - Normal mode -                
                 if (!wasDetected && detected && animationPlaying) {
                     // Person re-detected — stop idle animation so tracking takes over
-                    currentAction?.stop();
+                    mixer?.stopAllAction();
                     currentAction = undefined;
                     animationPlaying = false;
                 }
@@ -777,6 +808,7 @@ export const luckyLukeDemo: DemoHandler = {
 
             if (animationPlaying && mixer) {
                 mixer.update(delta);
+                
                 // In normal mode, if not detected, move character to initial position while playing idle animation
                 moveToInitialPosition();
 
