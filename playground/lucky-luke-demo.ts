@@ -47,7 +47,7 @@ const USE_WEBCAM_BY_DEFAULT = true;
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
     trackerConfig: {
-        displayScale: 1,
+        displayScale: 0.5,
         ignoreFace: true,
         ignoreHands: true,
         smoothLandmarks: true,
@@ -385,7 +385,7 @@ export const luckyLukeDemo: DemoHandler = {
             mixer.stopAllAction();
             currentAction = mixer.clipAction(duelClip);
             currentAction.setLoop(LoopPingPong, 5);
-            currentAction.reset().play();
+            currentAction.reset().fadeIn(IDLE_CROSSFADE_DURATION).play();
             animationPlaying = true;
 
             let count = 5;
@@ -398,13 +398,14 @@ export const luckyLukeDemo: DemoHandler = {
                     duelCountEl.textContent = String(count);
                 } else {
                     clearInterval(tick);
-                    duelCountEl.textContent = 'Shoot !';
+                    duelCountEl.textContent = 'Tir !';
                     setTimeout(() => {
                         duelCountdownEl.style.display = 'none';
                         duelCountdown = false;
+                        console.log("Décompte terminé, détection du tir ...");
                     }, 400);
 
-                    console.log("Décompte terminé, attente du tir...");
+                    console.log("Dernier tick du décompte");
                 }
                 
             }, 1000);
@@ -416,9 +417,11 @@ export const luckyLukeDemo: DemoHandler = {
             duelGunTriggered = true;
             //duelMode = false;
             //duelCountdown = true;
+            duelLayIdlePlaying = true;
 
             playOneShot(gunShotBuffer)
-            // setTimeout(() => playOneShot(gunShotBuffer), 150);
+            
+            console.log("Tir déclenché, lecture de l'animation de chute...");
 
             const hitClip = clips.find(c => c.name === 'Falling Back Death');
             if (!hitClip) { duelCountdown = false; duelGunTriggered = false; return; }
@@ -429,27 +432,34 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction.clampWhenFinished = true;
             currentAction.reset().play();
             // animationPlaying = true;
+            
 
+            // Sequence de fin
             setTimeout(() => {
+
                 if (!mixer) { duelCountdown = false; duelGunTriggered = false; return; }
                 const layClip = clips.find(c => c.name === 'Getting Up');
                 if (!layClip) { duelCountdown = false; duelGunTriggered = false; animationPlaying = false; return; }
                 currentAction?.stop();
                 currentAction = mixer.clipAction(layClip);
                 currentAction.setLoop(LoopOnce, 1);
-                currentAction.clampWhenFinished = true;
+                currentAction.clampWhenFinished = false;
                 currentAction.reset().play();
-                duelLayIdlePlaying = true;
+               
+                console.log("Timeout 1 over, lecture de l'animation Getting Up...");
+                
                 // mixer "finished" handler finalises the sequence
                 setTimeout(() => {
+                    console.log("Timeout 2 over, reset de l'état");
                     duelMode = false;
                     duelCountdown = false;
                     duelGunTriggered = false;
-                    if (!mixer) { return; }
-                    currentAction?.stop();
-                    currentAction = undefined;
-                }, 9000);
-            }, 5000);
+                    duelLayIdlePlaying = false;
+                    //wasDetected = false;
+                    //animationPlaying = false;
+                    
+                }, 4000);
+            }, 4000);
         }
 
         // — Rig management —
@@ -756,18 +766,23 @@ export const luckyLukeDemo: DemoHandler = {
 
                 // - Duel mode -
                 if (wasDetected && !detected) {
-                    console.log("Lost detection — Cancel duelMode");
-                    duelMode = false;
-                    duelCountdown = false;
-                    duelGunTriggered = false;
-                    duelShootDetected = false;
-                    duelGunGrabbedL = false;
-                    duelGunGrabbedR = false;
-                    mixer?.stopAllAction();
-                    currentAction = undefined;
-                    animationPlaying = false;
-                    idleAnimIndex = -1;
-                    playNextIdleAnimation();
+                    if (duelLayIdlePlaying) {
+                        console.log("Person disappeared during duel, waiting for reset till animations end...");                        
+                    } else {
+                        // Person disappeared during the duel — reset everything
+                        console.log("Person disappeared during duel, resetting state");
+                        duelMode = false;
+                        duelCountdown = false;
+                        duelGunTriggered = false;
+                        duelShootDetected = false;
+                        duelGunGrabbedL = false;
+                        duelGunGrabbedR = false;
+                        mixer?.stopAllAction();
+                        currentAction = undefined;
+                        animationPlaying = false;
+                        idleAnimIndex = -1;
+                        playNextIdleAnimation();
+                    }   
                 }
 
                 // Safety catch: animation ended while nobody was there (e.g. after the
