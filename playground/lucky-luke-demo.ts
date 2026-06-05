@@ -3,7 +3,6 @@ import {
     AnimationClip,
     AnimationMixer,
     LoopOnce,
-    LoopRepeat,
     AudioLoader,
     AxesHelper,
     BufferAttribute,
@@ -16,19 +15,17 @@ import {
     Material,
     Mesh,
     MeshLambertMaterial,
-    MeshPhongMaterial,
     Object3D,
     PerspectiveCamera,
     PlaneGeometry,
     Scene,
     SkinnedMesh,
-    SpotLight,
-    SpotLightHelper,
     Texture,
     TextureLoader,
     Vector3,
     WebGPURenderer,
     LoopPingPong,
+    ShadowMaterial,
 } from "three/webgpu";
 
 import { GLTFLoader, OrbitControls } from "three/examples/jsm/Addons.js";
@@ -36,6 +33,7 @@ import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Inspector } from "three/examples/jsm/inspector/Inspector.js";
 import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
+import { ShaderLib } from "three";
 
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
@@ -43,6 +41,7 @@ const DEBUG_MODE = true;
 const GUN_GRAB_DISTANCE = 0.065; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
 const WRIST_ABOVE_ELBOW_DISTANCE = 0.05; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
 const USE_WEBCAM_BY_DEFAULT = true;
+const HEAD_ROTATION_OFFSET_X = 10; // degrees, extra rotation applied to the head bone around its local X axis
 
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
@@ -51,7 +50,7 @@ export const luckyLukeDemo: DemoHandler = {
         ignoreFace: true,
         ignoreHands: true,
         smoothLandmarks: true,
-        debugVideo: import.meta.env.BASE_URL + "Lucky-luke.mp4",
+        debugVideo: import.meta.env.BASE_URL + "Lucky-luke.mp4"
     },
     setup: (
         renderer: WebGPURenderer,
@@ -72,15 +71,15 @@ export const luckyLukeDemo: DemoHandler = {
         ctrl.dampingFactor = 0.2;
         ctrl.enableDamping = true;
 
-        camera.position.set(0, 0.18, 0.5);
-        camera.lookAt(0, 0.7, 3);
-        ctrl.target.set(0,  0.7, 3);
+        camera.position.set(0, 0.6, 0.7);
+        camera.lookAt(0, 0.5, 3);
+        ctrl.target.set(0,  0.5, 3);
         ctrl.update();
 
         // - Light directionnal - 
 
-        const dirLight = new DirectionalLight( 0xffffff, 2 );
-        dirLight.position.set( 0, 0.5, -3 );   // behind character, elevated
+        const dirLight = new DirectionalLight( 0xffffff, 2.5 );
+        dirLight.position.set( 0, 0.35, -3 );   // behind character, elevated
         dirLight.target.position.set( 0, 0, 3 ); // aimed at the wall
         
         dirLight.castShadow = true;
@@ -94,23 +93,11 @@ export const luckyLukeDemo: DemoHandler = {
 
         const dirLightHelper = new DirectionalLightHelper( dirLight, 10 );
         scene.add( dirLightHelper );
-
-        const spotLight = new SpotLight( 0xffffff, 10, 10, Math.PI / 5, 0.5 );
-        spotLight.position.set( 0, 2.8, 2 );
-        spotLight.castShadow = false;
-        spotLight.target.position.set( 0, 0, 1 ); 
-        scene.add( spotLight );
-        scene.add( spotLight.target );
-
-        const spotLightHelper = new SpotLightHelper( spotLight, 10 );
-        scene.add( spotLightHelper );
         
         // Floor plane
-        const floorMat = new MeshPhongMaterial( {
-					color: 0xffffff,
-					shininess: 150,
-					specular: 0xffffff
-				} );
+
+        const floorMat = new ShadowMaterial({ color: 0x000000, fog: false });
+        floorMat.opacity = 0.75;
 		const floor = new Mesh( new PlaneGeometry( 10, 10 ), floorMat ); 
 		floor.rotation.x = - Math.PI / 2;
         floor.receiveShadow = true;
@@ -297,7 +284,6 @@ export const luckyLukeDemo: DemoHandler = {
             .onChange((v: boolean) => {
                 axesHelper.visible = v;
                 dirLightHelper.visible = v;
-                spotLightHelper.visible = v;
             });
 
         // — Animations —
@@ -474,6 +460,10 @@ export const luckyLukeDemo: DemoHandler = {
         let upperArmL: Object3D | undefined;
         let upperArmR: Object3D | undefined;
 
+        // Foot bones — needed for floor-snapping
+        let footL: Object3D | undefined;
+        let footR: Object3D | undefined;
+
         // Rising-edge flags for duel gun-grab detection
         let gunLWasClose = false;
         let gunRWasClose = false;
@@ -513,6 +503,8 @@ export const luckyLukeDemo: DemoHandler = {
 
             upperArmL = root.getObjectByName("upper_armL");
             upperArmR = root.getObjectByName("upper_armR");
+            footL = root.getObjectByName("footL");
+            footR = root.getObjectByName("footR");
 
             // Reset duel detection rising-edge state for the new rig
             gunLWasClose = false;
@@ -715,7 +707,7 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction.setLoop(LoopOnce, 1);
             currentAction.clampWhenFinished = true;
 
-            console.log("Playing idle animation:", clips[next].name);
+            // console.log("Playing idle animation:", clips[next].name);
 
             if (prevAction) {
                 // warping:false avoids modifying timeScale on either action —
@@ -833,11 +825,29 @@ export const luckyLukeDemo: DemoHandler = {
             } else if (detected) {
                 lukeBind?.update(delta);
 
-                 // position character horizontally to follow the detected person
+                // Tuning character position
                 if (modelRoot) {
+                    // position character horizontally to follow the detected person
                     const hip = tracker.poseTracker!.getNormalizedMarkPosition('hips' as any, _posA);
                     modelRoot.position.x = (hip.x - 0.5) * 2;
                     modelRoot.position.y = Math.max(-0.5, (0.5 - hip.y) * 2); // invert so up = positive
+
+                    // Floor-snap: if both feet are reliably detected and either foot
+                    // is below the floor (world Y < 0), push the rig up so the lowest
+                    // foot sits exactly on y = 0.
+                    if (tracker.poseTracker?.areFeetDetected()) {
+                        const yL = footL ? (footL.getWorldPosition(_posB).y) : 0;
+                        const yR = footR ? (footR.getWorldPosition(_posC).y) : 0;
+                        const lowestFoot = Math.min(yL, yR);
+                        if (lowestFoot < 0) modelRoot.position.y -= lowestFoot;
+                    }
+
+                    // if (frameCount++ >= 30) {
+                    //     frameCount = 0;
+                    //     const heel = tracker.poseTracker!.getNormalizedMarkPosition('leftFoot' as any, _posB);
+                    //     const feetVisible = tracker.poseTracker?.areFeetDetected();
+                    //     console.log('LeftFoot visible:', feetVisible, '— X,Y position (normalized):', heel.x.toFixed(2), heel.y.toFixed(2));
+                    // }
                 }
                 // updateGunGrab();
                 if (!duelMode) { detectDuelMode(); }

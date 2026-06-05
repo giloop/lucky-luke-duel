@@ -110,6 +110,25 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 	 */
 	get rightWristNormalizedPosition() { return this._rightWristNormalizedPosition; }
 
+	/**
+	 * Returns true when both feet landmarks are reliably detected in the frame.
+	 * Uses the `visibility` score provided by MediaPipe for the ankle and foot-index
+	 * landmarks of each foot. A landmark with visibility below `threshold` is
+	 * considered out of frame or occluded.
+	 * @param threshold Minimum visibility score to consider a landmark detected (default 0.5).
+	 */
+	areFeetDetected(threshold = 0.5): boolean {
+		const landmarks = this._lastResult?.landmarks[0];
+		if (!landmarks) return false;
+		const indices = [
+			this.points.leftFoot,   // left ankle  (27)
+			this.points.rightFoot,  // right ankle (28)
+			this.points.leftToes,   // left foot index  (31)
+			this.points.rightToes,  // right foot index (32)
+		];
+		return indices.every(i => (landmarks[i]?.visibility ?? 0) >= threshold);
+	}
+
 	constructor(private readonly poseLandmarker:PoseLandmarker, private readonly config?:Partial<PoseTrackerConfig>){ 
 
 		super(poseMarks, PoseLandmarker.POSE_CONNECTIONS)
@@ -227,7 +246,7 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 				syncBone(delta, map.torso, "torso", "neck", sideShoulders, "+x")
 				syncBone(delta, map.neck, "neck", "head", sideHead, "+x")
 				syncBone(delta, map.head, "nose", "forehead", sideHead, "+x")
-
+		
 				syncBone(delta, map.leftArm, "leftArm", "leftElbow", sideShoulders, "-x")
 				syncBone(delta, map.leftElbow, "leftElbow", "leftWrist", sideShoulders, "-x")
 
