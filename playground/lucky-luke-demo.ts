@@ -40,6 +40,7 @@ const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
 const GUN_GRAB_DISTANCE = 0.065; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
 const WRIST_ABOVE_ELBOW_DISTANCE = 0.05; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
+const ARM_X_TOLERANCE = 0.05; // Step 2 guard: wrist must be this much closer to camera than elbow (normalized z) to count as arm pointing toward camera
 const USE_WEBCAM_BY_DEFAULT = true;
 const HEAD_ROTATION_OFFSET_X = 10; // degrees, extra rotation applied to the head bone around its local X axis
 
@@ -272,9 +273,9 @@ export const luckyLukeDemo: DemoHandler = {
         // });
         modelPanel.add({
             logCamera: () => {
-                console.log("Camera position:", camera.position.toArray().map(n => +n.toFixed(3)));
-                console.log("Camera lookAt (target):", ctrl.target.toArray().map(n => +n.toFixed(3)));
-                console.log("Camera look direction:", camera.getWorldDirection(new Vector3()).toArray().map(n => +n.toFixed(3)));
+                console.log("Camera position:", camera.position.toArray().map(n => +n.toFixed(2)));
+                console.log("Camera lookAt (target):", ctrl.target.toArray().map(n => +n.toFixed(2)));
+                console.log("Camera look direction:", camera.getWorldDirection(new Vector3()).toArray().map(n => +n.toFixed(2)));
                 console.log("Camera rotation (deg):", [camera.rotation.x, camera.rotation.y, camera.rotation.z].map(r => +(r * 180 / Math.PI).toFixed(1)));
             }
         }, "logCamera").name("Log camera");
@@ -602,10 +603,12 @@ export const luckyLukeDemo: DemoHandler = {
             
             if (duelGunGrabbedL)
             {
-                // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow) to trigger the shot   
+                // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow)
+                // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
+                const armFacingL = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
                 const closeL = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
-                console.log('Left wrist / elbow:', Math.abs(_posA.y - _posC.y).toFixed(3), '— close:', closeL);
-                if (closeL && !gunLWasClose) {
+                console.log('Left wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:', Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'close:', closeL);
+                if (closeL && armFacingL && !gunLWasClose) {
                     console.log('Shoot L detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
@@ -615,7 +618,7 @@ export const luckyLukeDemo: DemoHandler = {
             } else {
                 // Step 1 : detect grab (wrist close to leg)
                 const closeL = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
-                console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeL);
+                console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeL);
                 if (closeL && !gunLWasClose) {
                     console.log('Gun L grabbed !');
                     duelGunGrabbedL = true;
@@ -631,10 +634,12 @@ export const luckyLukeDemo: DemoHandler = {
             
             if (duelGunGrabbedR)
             {
-                // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow) to trigger the shot   
+                // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow)
+                // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
+                const armFacingR = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
                 const closeR = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
-                console.log('Right wrist / elbow:', Math.abs(_posA.y - _posC.y).toFixed(3), '— close:', closeR);
-                if (closeR  && !gunRWasClose) {
+                console.log('Right wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'close:', closeR);
+                if (closeR && armFacingR && !gunRWasClose) {
                     console.log('Shoot R detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
@@ -644,7 +649,7 @@ export const luckyLukeDemo: DemoHandler = {
             } else {
                 // Step 1 : detect grab (wrist close to leg)
                 const closeR = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
-                console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(3), '— close:', closeR);
+                console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeR);
                 if (closeR && !gunRWasClose) {
                     console.log('Gun R grabbed !');
                     duelGunGrabbedR = true;
