@@ -40,16 +40,16 @@ import { ShaderLib } from "three";
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
-const GUN_GRAB_DISTANCE = 0.065; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
-const WRIST_ABOVE_ELBOW_DISTANCE = 0.05; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
-const ARM_X_TOLERANCE = 0.05; // Step 2 guard: wrist must be this much closer to camera than elbow (normalized z) to count as arm pointing toward camera
+const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
+const WRIST_ABOVE_ELBOW_DISTANCE = 0.07; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
+const ARM_X_TOLERANCE = 0.07; // Step 2 guard: wrist must be this much closer to camera than elbow (normalized z) to count as arm pointing toward camera
 const USE_WEBCAM_BY_DEFAULT = true;
 const HEAD_ROTATION_OFFSET_X = 10; // degrees, extra rotation applied to the head bone around its local X axis
 
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
     trackerConfig: {
-        displayScale: 0.5,
+        displayScale: 1.0,
         ignoreFace: true,
         ignoreHands: true,
         smoothLandmarks: true,
