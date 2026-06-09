@@ -37,7 +37,7 @@ import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 import { ShaderLib } from "three";
 
-const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-simplified.glb";
+const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-shoot.glb"; // "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
 const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
@@ -141,7 +141,7 @@ export const luckyLukeDemo: DemoHandler = {
         const progressFill = document.getElementById('loading-fill') as HTMLElement;
         const startBtn = document.getElementById('start-btn') as HTMLElement;
 
-        const TOTAL_ASSETS = 5; // animations.glb + Lucky-Luke-shoot.glb + Duel.mp3 + Gunshot.mp3 + model
+        const TOTAL_ASSETS = 3; // animations.glb + Lucky-Luke-shoot.glb 4 + Gunshot.mp3 + model
         let loadedCount = 0;
         const onAssetLoaded = () => {
             loadedCount++;
@@ -301,10 +301,10 @@ export const luckyLukeDemo: DemoHandler = {
         const excludedClipsFromPlaylist = ['Jump 2', 'duel-idle', 'Falling Back Death', 'Getting Up'];
 
         let luckyShootClips: AnimationClip[] = [];
-        new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "Lucky-Luke-shoot.glb")
-            .then((gltf) => { luckyShootClips.push(...gltf.animations); })
-            .catch((err) => console.warn("Could not load Lucky-Luke-shoot.glb:", err))
-            .finally(onAssetLoaded);
+        // new GLTFLoader().loadAsync(import.meta.env.BASE_URL + "Lucky-Luke-shoot.glb")
+        //     .then((gltf) => { luckyShootClips.push(...gltf.animations); })
+        //     .catch((err) => console.warn("Could not load Lucky-Luke-shoot.glb:", err))
+        //     .finally(onAssetLoaded);
 
         const animPanel = inspector.createParameters("Animations");
 
@@ -332,10 +332,6 @@ export const luckyLukeDemo: DemoHandler = {
 
         let audioCtx: AudioContext | undefined;
 
-        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Duel.mp3")
-            .catch((err) => console.warn("Could not load Duel.mp3:", err))
-            .finally(onAssetLoaded);
-
         let gunShotBuffer: AudioBuffer | undefined;
         new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Gunshot.mp3")
             .then((buf) => { gunShotBuffer = buf; })
@@ -357,6 +353,7 @@ export const luckyLukeDemo: DemoHandler = {
         let duelGunTriggered = false; // true: le joueur a tiré pendant le duel après le décompte
         let duelLayIdlePlaying = false; // true: la transition "Lay to Idle" est en cours de lecture après le tir du duel, avant de revenir à la détection normale
         let luckyWinPlaying = false;   // true: Lucky's shoot animation is running (player hasn't drawn yet)
+        let luckyWins = false;
         let luckyRigAction: AnimationAction | undefined;
         let luckyGunAction: AnimationAction | undefined;
         let luckyRigBackAction: AnimationAction | undefined;
@@ -376,6 +373,7 @@ export const luckyLukeDemo: DemoHandler = {
             duelGunGrabbedR = false;
             duelCountdown = true;
             duelGunTriggered = false;
+            luckyWins = false;
 
             const duelClip = clips.find(c => c.name === 'duel-idle');
             if (!duelClip) {
@@ -396,17 +394,18 @@ export const luckyLukeDemo: DemoHandler = {
             
             const tick = setInterval(() => {
                 count--;
-                if (count > 1) {
+                if (count > 0) {
                     duelCountEl.textContent = String(count);
                 } else {
+                    duelCountdown = false;
                     clearInterval(tick);
                     duelCountEl.textContent = 'Tir !';
                     setTimeout(() => {
                         duelCountdownEl.style.display = 'none';
-                        duelCountdown = false;
+                        
                         playLuckyShoot();
                         console.log("Décompte terminé, détection du tir ...");
-                    }, 400);
+                    }, 500);
 
                     console.log("Dernier tick du décompte");
                 }
@@ -419,7 +418,7 @@ export const luckyLukeDemo: DemoHandler = {
             const rigClip = luckyShootClips.find(c => c.name === 'Lucky-rig-shoot');
             const gunClip = luckyShootClips.find(c => c.name === 'Lucky-gun-shoot');
             const rigBackClip = luckyShootClips.find(c => c.name === 'Lucky-rig-back');
-            const gunBackClip = luckyShootClips.find(c => c.name === 'Lucky-gun-back');
+            const gunBackClip = luckyShootClips.find(c => c.name === 'Lucky-gun-rest');
             const victoryClip = clips.find(c => c.name === 'Victory Idle 2');
 
             if (!rigClip || !gunClip || !rigBackClip || !gunBackClip) {
@@ -437,12 +436,12 @@ export const luckyLukeDemo: DemoHandler = {
             luckyRigAction = mixer.clipAction(rigClip);
             luckyRigAction.setLoop(LoopOnce, 1);
             luckyRigAction.clampWhenFinished = true;
-            luckyRigAction.reset().setEffectiveTimeScale(1).play();
+            luckyRigAction.reset().play();
 
             luckyGunAction = mixer.clipAction(gunClip);
             luckyGunAction.setLoop(LoopOnce, 1);
             luckyGunAction.clampWhenFinished = true;
-            luckyGunAction.reset().setEffectiveTimeScale(1).play();
+            luckyGunAction.reset().play();
 
             luckyWinPlaying = true;
 
@@ -451,7 +450,8 @@ export const luckyLukeDemo: DemoHandler = {
             const luckyRigBackAction = mixer.clipAction(rigBackClip);
             const luckyGunBackAction = mixer.clipAction(gunBackClip);
             const victoryAction = mixer.clipAction(victoryClip);
-            let luckyWins = false;
+            
+            console.log({ luckyShootAction, luckyRigBackAction, luckyGunBackAction, victoryAction });
 
             // Trigger des actions à la fin de chaque animation de tir de Lucky pour gérer les différents cas 
             // (tir normal, tir interrompu par le joueur, fin de l'animation de victoire)
@@ -460,25 +460,38 @@ export const luckyLukeDemo: DemoHandler = {
                 console.log("Animation finished during Lucky's shoot sequence:", e.action.getClip().name);
                 if (!luckyWinPlaying) return; // player drew first — already cancelled
 
-                if (e.action === luckyShootAction) { 
+                if (e.action === luckyShootAction) {
                     // Fin du clip lucky-rig-shoot : tir
                     luckyWins = true;
                     playOneShot(gunShotBuffer);
-                    
+
+                    // Stop the shoot actions so they don't fight the back animations
+                    // (clampWhenFinished keeps them at weight=1 which conflicts with the next clips)
+                    luckyRigAction?.stop();
+                    luckyGunAction?.stop();
+
                     // Clip de tir rejoué à l'envers
+                    console.log("Lucky shoot finished, rangement du gun ...",
+                    );
                     luckyGunBackAction.setLoop(LoopOnce, 1);
                     luckyGunBackAction.clampWhenFinished = true;
                     luckyGunBackAction.reset().play();
+
                     luckyRigBackAction.setLoop(LoopOnce, 1);
                     luckyRigBackAction.clampWhenFinished = true;
                     luckyRigBackAction.reset().play();
                     
                 } else if (e.action === luckyGunBackAction) {
 
-                   // Play Victory animation
+                    console.log("Rangement du gun finished, victoire ...");
+
+                    luckyGunBackAction?.stop();
+                    luckyRigBackAction?.stop();
+
+                    // Play Victory animation
                     victoryAction.setLoop(LoopOnce, 1);
                     victoryAction.clampWhenFinished = true;
-                    victoryAction.reset().fadeIn(0.5 * IDLE_CROSSFADE_DURATION).play();
+                    victoryAction.reset().play();
                 
                     // Message
                     duelCountdownEl.style.display = 'flex';
@@ -486,13 +499,15 @@ export const luckyLukeDemo: DemoHandler = {
                     setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
                 } else if (e.action === victoryAction) {
-                    // Fin de la séqsuence Lucky wins
+                    // Fin de la séquence Lucky wins
                     mixer!.removeEventListener('finished', onLuckyWin);
                     
-                    // initgunsPosition();
+                    console.log("Victory finished, reset state ...");
+                    initgunsPosition();
 
                     // After victory animation, reset state to detection mode
                     setTimeout(() => {
+                        mixer?.stopAllAction();
                         luckyWinPlaying = false;
                         luckyRigAction = undefined;
                         luckyGunAction = undefined;
@@ -513,7 +528,8 @@ export const luckyLukeDemo: DemoHandler = {
 
         function triggerDuelShot() {
             // Pas de détection pendant le countdown, et pas de tir multiple pendant le duel
-            if (!duelMode || duelCountdown || duelGunTriggered || !mixer) return;
+            // Pas de détection si Lucky a tiré avant
+            if (!duelMode || duelCountdown || duelGunTriggered || luckyWins || !mixer) return;
             duelGunTriggered = true;
 
             // Player drew first — cancel Lucky's shoot animation
@@ -642,6 +658,9 @@ export const luckyLukeDemo: DemoHandler = {
             modelRoot = root;
             scene.add(root);
 
+            // Ajout des animations de tir de Lucky à part pour pouvoir les jouer en cas de duel
+            luckyShootClips.push(...gltf.animations);
+
             upperArmL = root.getObjectByName("upper_armL");
             upperArmR = root.getObjectByName("upper_armR");
             footL = root.getObjectByName("footL");
@@ -735,6 +754,9 @@ export const luckyLukeDemo: DemoHandler = {
             return Math.abs(_posA.z - _posB.z) < 0.05;
         }
 
+        let lastLeftWristPos = new Vector3();
+        let lastRightWristPos = new Vector3();
+
         function detectGunGrabDuel() {
             if (duelShootDetected) return;
             const pt = tracker.poseTracker;
@@ -754,7 +776,7 @@ export const luckyLukeDemo: DemoHandler = {
                 // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
                 const armFacingL = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
                 const closeL = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
-                console.log('Left wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:', Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'close:', closeL);
+                // console.log('Left wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:', Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'close:', closeL);
                 if (closeL && armFacingL && !gunLWasClose) {
                     console.log('Shoot L detected !');
                     duelShootDetected = true;
@@ -765,7 +787,7 @@ export const luckyLukeDemo: DemoHandler = {
             } else {
                 // Step 1 : detect grab (wrist close to leg)
                 const closeL = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
-                console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeL);
+                // console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeL);
                 if (closeL && !gunLWasClose) {
                     console.log('Gun L grabbed !');
                     duelGunGrabbedL = true;
@@ -785,7 +807,7 @@ export const luckyLukeDemo: DemoHandler = {
                 // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
                 const armFacingR = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
                 const closeR = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
-                console.log('Right wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'close:', closeR);
+                // console.log('Right wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'close:', closeR);
                 if (closeR && armFacingR && !gunRWasClose) {
                     console.log('Shoot R detected !');
                     duelShootDetected = true;
@@ -796,7 +818,7 @@ export const luckyLukeDemo: DemoHandler = {
             } else {
                 // Step 1 : detect grab (wrist close to leg)
                 const closeR = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
-                console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeR);
+                // console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeR);
                 if (closeR && !gunRWasClose) {
                     console.log('Gun R grabbed !');
                     duelGunGrabbedR = true;
@@ -859,7 +881,7 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction.setLoop(LoopOnce, 1);
             currentAction.clampWhenFinished = true;
 
-            // console.log("Playing idle animation:", clips[next].name);
+            console.log("Playing next animation:", clips[next].name);
 
             if (prevAction) {
                 // warping:false avoids modifying timeScale on either action —
