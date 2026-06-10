@@ -18,6 +18,7 @@ import {
     Object3D,
     PerspectiveCamera,
     PlaneGeometry,
+    BoxGeometry,
     Scene,
     SkinnedMesh,
     Texture,
@@ -28,10 +29,12 @@ import {
     ShadowMaterial,
     Quaternion,
     Matrix4,
+    CylinderGeometry,
 } from "three/webgpu";
 
 import { GLTFLoader, OrbitControls } from "three/examples/jsm/Addons.js";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { CSG } from "three-csg-ts";
 import { Inspector } from "three/examples/jsm/inspector/Inspector.js";
 import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
@@ -111,15 +114,39 @@ export const luckyLukeDemo: DemoHandler = {
         const wallMaterial = new MeshLambertMaterial( { color: 0xffffff, map: wallTexture } );
         const wallHeight = 3;
         const wallWidth = 5;	
-        const wall = new Mesh( new PlaneGeometry( wallWidth, wallHeight ), wallMaterial );
+        const wall = new Mesh( new BoxGeometry( wallWidth, wallHeight, 0.01 ), wallMaterial );
         wall.rotation.y = Math.PI;
         wall.position.z = 2.5;
         wall.position.y += 0.5 * wallHeight;
         wall.receiveShadow = true;
-        //wall.scale.x = image.width/50.0
-        // wall.scale.y = image.height/50.0;
         scene.add( wall );
-        
+
+        // Bullet hole — used as CSG brush; hidden by default
+        const trouDeBalle = new CylinderGeometry(0.015, 0.015, 0.5, 32);
+        trouDeBalle.rotateX(Math.PI / 2);
+        const trouMesh = new Mesh(trouDeBalle, wallMaterial);
+        trouMesh.position.set(0, 0.9, 2.5);
+        trouMesh.visible = false;
+        scene.add(trouMesh);
+
+        // Precompute wall with bullet hole via CSG subtraction
+        wall.updateMatrix();
+        trouMesh.updateMatrix();
+        const wallWithHole = CSG.subtract(wall, trouMesh);
+        wallWithHole.material = wallMaterial;
+        wallWithHole.receiveShadow = true;
+        wallWithHole.visible = false;
+        scene.add(wallWithHole);
+
+        function showBulletHole() {
+            wall.visible = false;
+            wallWithHole.visible = true;
+        }
+        function hideBulletHole() {
+            wallWithHole.visible = false;
+            wall.visible = true;
+        }
+
         // — Inspector panels —
 
         const inspector = new Inspector();
@@ -397,24 +424,20 @@ export const luckyLukeDemo: DemoHandler = {
                 if (count > 0) {
                     duelCountEl.textContent = String(count);
                 } else {
-                    duelCountdown = false;
                     clearInterval(tick);
                     duelCountEl.textContent = 'Tir !';
-                    setTimeout(() => {
-                        duelCountdownEl.style.display = 'none';
+                    console.log("Décompte terminé, détection du tir activée ...");
+                    duelCountdown = false;
+                    playLuckyShoot();
                         
-                        playLuckyShoot();
-                        console.log("Décompte terminé, détection du tir ...");
-                    }, 500);
-
-                    console.log("Dernier tick du décompte");
+                    setTimeout(() => { duelCountdownEl.style.display = 'none';  }, 500);
                 }
-                
             }, 1000);
         }
 
         function playLuckyShoot() {
-            if (!mixer) return;
+            if (!mixer || duelGunTriggered) return;
+
             const rigClip = luckyShootClips.find(c => c.name === 'Lucky-rig-shoot');
             const gunClip = luckyShootClips.find(c => c.name === 'Lucky-gun-shoot');
             const rigBackClip = luckyShootClips.find(c => c.name === 'Lucky-rig-back');
@@ -432,6 +455,7 @@ export const luckyLukeDemo: DemoHandler = {
             }
 
             currentAction?.stop();
+            currentAction = undefined;
 
             luckyRigAction = mixer.clipAction(rigClip);
             luckyRigAction.setLoop(LoopOnce, 1);
@@ -445,13 +469,18 @@ export const luckyLukeDemo: DemoHandler = {
 
             luckyWinPlaying = true;
 
-            // When Lucky-rig-shoot ends uninterrupted (player didn't draw first), show "Lucky wins !"
-            const luckyShootAction = luckyRigAction;
-            const luckyRigBackAction = mixer.clipAction(rigBackClip);
-            const luckyGunBackAction = mixer.clipAction(gunBackClip);
-            const victoryAction = mixer.clipAction(victoryClip);
-            
-            console.log({ luckyShootAction, luckyRigBackAction, luckyGunBackAction, victoryAction });
+            // Assign module-level refs so triggerDuelShot() can cancel them if the player draws
+            luckyRigBackAction = mixer.clipAction(rigBackClip);
+            luckyGunBackAction = mixer.clipAction(gunBackClip);
+            victoryAction = mixer.clipAction(victoryClip);
+
+            // Non-null local aliases — safe because we just assigned all four above
+            const luckyShootAction  = luckyRigAction!;
+            const capturedRigBack   = luckyRigBackAction!;
+            const capturedGunBack   = luckyGunBackAction!;
+            const capturedVictory   = victoryAction!;
+
+            console.log({ luckyShootAction, capturedRigBack, capturedGunBack, capturedVictory });
 
             // Trigger des actions à la fin de chaque animation de tir de Lucky pour gérer les différents cas 
             // (tir normal, tir interrompu par le joueur, fin de l'animation de victoire)
@@ -470,35 +499,33 @@ export const luckyLukeDemo: DemoHandler = {
                     luckyRigAction?.stop();
                     luckyGunAction?.stop();
 
-                    // Clip de tir rejoué à l'envers
-                    console.log("Lucky shoot finished, rangement du gun ...",
-                    );
-                    luckyGunBackAction.setLoop(LoopOnce, 1);
-                    luckyGunBackAction.clampWhenFinished = true;
-                    luckyGunBackAction.reset().play();
+                    console.log("Lucky shoot finished, rangement du gun ...");
+                    capturedGunBack.setLoop(LoopOnce, 1);
+                    capturedGunBack.clampWhenFinished = true;
+                    capturedGunBack.reset().play();
 
-                    luckyRigBackAction.setLoop(LoopOnce, 1);
-                    luckyRigBackAction.clampWhenFinished = true;
-                    luckyRigBackAction.reset().play();
-                    
-                } else if (e.action === luckyGunBackAction) {
+                    capturedRigBack.setLoop(LoopOnce, 1);
+                    capturedRigBack.clampWhenFinished = true;
+                    capturedRigBack.reset().play();
+
+                } else if (e.action === capturedGunBack) {
 
                     console.log("Rangement du gun finished, victoire ...");
 
-                    luckyGunBackAction?.stop();
-                    luckyRigBackAction?.stop();
+                    capturedGunBack.stop();
+                    capturedRigBack.stop();
 
                     // Play Victory animation
-                    victoryAction.setLoop(LoopOnce, 1);
-                    victoryAction.clampWhenFinished = true;
-                    victoryAction.reset().play();
-                
+                    capturedVictory.setLoop(LoopOnce, 1);
+                    capturedVictory.clampWhenFinished = true;
+                    capturedVictory.reset().play();
+
                     // Message
                     duelCountdownEl.style.display = 'flex';
                     duelCountEl.textContent = 'Lucky wins !';
                     setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
-                } else if (e.action === victoryAction) {
+                } else if (e.action === capturedVictory) {
                     // Fin de la séquence Lucky wins
                     mixer!.removeEventListener('finished', onLuckyWin);
                     
@@ -543,10 +570,10 @@ export const luckyLukeDemo: DemoHandler = {
             }
 
             playOneShot(gunShotBuffer);
-            // console.log("Tir déclenché, lecture de l'animation de chute...");
+            showBulletHole();
 
             const hitClip = clips.find(c => c.name === 'Falling Back Death');
-            if (!hitClip) { duelGunTriggered = false; return; }
+            if (!hitClip) { duelGunTriggered = false; console.warn("Hit clip not found"); return; }
 
             // Start "Falling Back Death"
             currentAction?.stop();
@@ -557,11 +584,11 @@ export const luckyLukeDemo: DemoHandler = {
 
             // When "Falling Back Death" ends, chain into "Getting Up"
             const onFallFinished = (e: { action: AnimationAction }) => {
-                if (e.action !== currentAction) return;
+                if (e.action !== currentAction) { console.warn("Unexpected action finished", e.action); return; }
                 mixer!.removeEventListener('finished', onFallFinished);
 
                 const layClip = clips.find(c => c.name === 'Getting Up');
-                if (!layClip || !mixer) { duelGunTriggered = false; return; }
+                if (!layClip || !mixer) { duelGunTriggered = false; console.warn("Lay clip not found"); return; }
 
                 // console.log("finie ... lecture animation de relevé...");
                 currentAction?.stop();
@@ -573,17 +600,22 @@ export const luckyLukeDemo: DemoHandler = {
 
 
                 const onGetUpFinished = (e: { action: AnimationAction }) => {
-                    if (e.action !== currentAction) return;
+                    if (e.action !== currentAction) { console.warn("Unexpected action finished", e.action); return; }
                     mixer!.removeEventListener('finished', onGetUpFinished);
 
-                    // console.log("finie ... reset state du duel...");
+                    console.log("finie ... reset state du duel...");
                     
+                    hideBulletHole();
                     duelMode = false;
                     duelCountdown = false;
                     duelGunTriggered = false;
                     duelLayIdlePlaying = false;
+                    duelShootDetected = false;
+                    duelGunGrabbedL = false;
+                    duelGunGrabbedR = false;
+                    animationPlaying = false;
                 }
-                
+
                 mixer.addEventListener('finished', onGetUpFinished);
 
             };    

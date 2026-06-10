@@ -44,5 +44,8 @@
     "three": "^0.183.1"
   },
   "license": "MIT",
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "pnpm@9.0.0",
+  "dependencies": {
+    "three-csg-ts": "^3.2.0"
+  }
 }
