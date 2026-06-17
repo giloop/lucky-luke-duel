@@ -77,8 +77,8 @@ export const luckyLukeDemo: DemoHandler = {
         ctrl.dampingFactor = 0.2;
         ctrl.enableDamping = true;
 
-        camera.position.set(0, 0.6, 0.7);
-        camera.lookAt(0, 0.5, 3);
+        camera.position.set(0, 0.84, 0.51);
+        camera.lookAt(0, 0.73, 3.01);
         ctrl.target.set(0,  0.5, 3);
         ctrl.update();
 
@@ -425,7 +425,7 @@ export const luckyLukeDemo: DemoHandler = {
                     duelCountEl.textContent = String(count);
                 } else {
                     clearInterval(tick);
-                    duelCountEl.textContent = 'Tir !';
+                    duelCountEl.textContent = 'Tire !';
                     console.log("Décompte terminé, détection du tir activée ...");
                     duelCountdown = false;
                     playLuckyShoot();
@@ -522,7 +522,7 @@ export const luckyLukeDemo: DemoHandler = {
 
                     // Message
                     duelCountdownEl.style.display = 'flex';
-                    duelCountEl.textContent = 'Lucky wins !';
+                    duelCountEl.textContent = 'Lucky<br>wins !';
                     setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
                 } else if (e.action === capturedVictory) {
