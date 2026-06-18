@@ -22,7 +22,7 @@ await Promise.all([renderer.init(), setupTracker(demo.trackerConfig)]).then(
 
         // — Camera —
         const camera = new THREE.PerspectiveCamera(
-            60,
+            75,
             window.innerWidth / window.innerHeight,
             0.1,
             100,

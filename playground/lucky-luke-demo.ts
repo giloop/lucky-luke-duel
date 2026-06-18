@@ -40,7 +40,7 @@ import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 import { ShaderLib } from "three";
 
-const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-all.glb"; // "Lucky-Luke-simplified.glb";
+const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-shoot.glb"; // "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
 const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
@@ -77,9 +77,9 @@ export const luckyLukeDemo: DemoHandler = {
         ctrl.dampingFactor = 0.2;
         ctrl.enableDamping = true;
 
-        camera.position.set(0, 0.84, 0.51);
-        camera.lookAt(0, 0.73, 3.01);
-        ctrl.target.set(0,  0.5, 3);
+        camera.position.set(0, 0.9, 0.55);
+        camera.lookAt(0, 0.93, 3.0);
+        ctrl.target.set(0,  0.93, 3);
         ctrl.update();
 
         // - Light directionnal - 
@@ -161,6 +161,8 @@ export const luckyLukeDemo: DemoHandler = {
         const applyDebugMode = (on: boolean) => {
             (inspector.domElement as HTMLElement).style.display = on ? '' : 'none';
             (tracker.domElement as HTMLElement).style.display = on ? '' : 'none';
+            axesHelper.visible = on;
+            dirLightHelper.visible = on;
         };
 
         // — Loading overlay —
@@ -931,6 +933,7 @@ export const luckyLukeDemo: DemoHandler = {
         }
 
         function moveToInitialPosition() {
+            if (!modelRoot) return;
             const direction = new Vector3().subVectors(initialPosition, modelRoot.position);
             const distance = direction.length();
             
@@ -962,13 +965,46 @@ export const luckyLukeDemo: DemoHandler = {
 
         new GLTFLoader().load(DEFAULT_MODEL, (gltf) => { setActiveRig(gltf); onAssetLoaded(); });
 
+        // — Camera zoom animation —
+        const CAMERA_ANIM_DURATION = 1.5; // seconds
+        const camPosIn  = new Vector3(0, 0.9, 0.55); // (0, 0.84, 0.51); // 
+        
+        const camPosOut = new Vector3(-1.54, 1.59, -1.45);
+        const camLookIn  = new Vector3(0, 0.9, 3.0); // (0, 0.5, 3); // 
+        const camLookOut = new Vector3(0, 0.88, 3.05); 
+        const _camLerp = new Vector3();
+        let cameraT = 0;       // 0 = "in" (detected), 1 = "out" (no detection)
+        let cameraTarget = 0;
+
+        function zoomOut() { cameraTarget = 1; }
+        function zoomIn()  { cameraTarget = 0; }
+
+        // Returns true while animating (caller should skip ctrl.update() in that case)
+        function updateCameraAnim(delta: number): boolean {
+            if (cameraT === cameraTarget) return false;
+            const step = delta / CAMERA_ANIM_DURATION;
+            cameraT = cameraTarget === 1
+                ? Math.min(1, cameraT + step)
+                : Math.max(0, cameraT - step);
+            const t = cameraT * cameraT * (3 - 2 * cameraT); // smoothstep easing
+            camera.position.lerpVectors(camPosIn, camPosOut, t);
+            _camLerp.lerpVectors(camLookIn, camLookOut, t);
+            camera.lookAt(_camLerp);
+            if (cameraT === cameraTarget) {
+                // Sync OrbitControls internal state so it doesn't snap on next ctrl.update()
+                ctrl.target.copy(_camLerp);
+                ctrl.update();
+            }
+            return true;
+        }
+
         let wasDetected = false;
 
         let frameCount = 0;
 
         // — Main update loop —
         return (delta: number) => {
-            ctrl.update();
+            if (!updateCameraAnim(delta)) ctrl.update();
 
             const detected = tracker.poseTracker?.detected ?? false;
 
@@ -1022,16 +1058,20 @@ export const luckyLukeDemo: DemoHandler = {
                     detectGunGrabDuel();
                 }
 
-            } else { 
-                // - Normal mode -                
-                if (!wasDetected && detected && animationPlaying) {
-                    // Person re-detected — stop idle animation so tracking takes over
-                    mixer?.stopAllAction();
-                    currentAction = undefined;
-                    animationPlaying = false;
+            } else {
+                // - Normal mode -
+                if (!wasDetected && detected) {
+                    zoomIn();
+                    if (animationPlaying) {
+                        // Person re-detected — stop idle animation so tracking takes over
+                        mixer?.stopAllAction();
+                        currentAction = undefined;
+                        animationPlaying = false;
+                    }
                 }
 
                 if (wasDetected && !detected) {
+                    zoomOut();
                     idleAnimIndex = -1;
                     playNextIdleAnimation();
                 }
