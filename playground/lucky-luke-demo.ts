@@ -524,7 +524,7 @@ export const luckyLukeDemo: DemoHandler = {
 
                     // Message
                     duelCountdownEl.style.display = 'flex';
-                    duelCountEl.textContent = 'Lucky<br>wins !';
+                    duelCountEl.innerHTML = 'Lucky<br>gagne !';
                     setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
                 } else if (e.action === capturedVictory) {
@@ -560,6 +560,9 @@ export const luckyLukeDemo: DemoHandler = {
             // Pas de détection si Lucky a tiré avant
             if (!duelMode || duelCountdown || duelGunTriggered || luckyWins || !mixer) return;
             duelGunTriggered = true;
+            
+            playOneShot(gunShotBuffer);
+            showBulletHole();
 
             // Player drew first — cancel Lucky's shoot animation
             if (luckyWinPlaying) {
@@ -571,9 +574,7 @@ export const luckyLukeDemo: DemoHandler = {
                 victoryAction?.stop(); victoryAction = undefined;
             }
 
-            playOneShot(gunShotBuffer);
-            showBulletHole();
-
+            
             const hitClip = clips.find(c => c.name === 'Falling Back Death');
             if (!hitClip) { duelGunTriggered = false; console.warn("Hit clip not found"); return; }
 
@@ -599,6 +600,11 @@ export const luckyLukeDemo: DemoHandler = {
                 currentAction.clampWhenFinished = true;
                 currentAction.reset().play();
                 duelLayIdlePlaying = true;
+
+                // Message
+                duelCountdownEl.style.display = 'flex';
+                duelCountEl.textContent = 'Bravo !';
+                setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
 
                 const onGetUpFinished = (e: { action: AnimationAction }) => {
