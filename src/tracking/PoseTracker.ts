@@ -82,6 +82,7 @@ type PoseTrackerConfig = {
 	modelPath:string
 	drawLandmarks?:boolean
 	smooth?:boolean
+	headRotationOffsetX?:number
 }
 
 /**
@@ -93,6 +94,7 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 	private _lastResult: PoseLandmarkerResult | undefined;
 
 	ignoreLegs:boolean = false;
+	headRotationOffsetX:number = 0;
 
 	/** True when at least one pose was detected in the last frame. */
 	detected:boolean = false;
@@ -138,6 +140,7 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 		this.root.scale.x *= 2 
 
 		this.ignoreLegs = config?.ignoreLegs ?? false;
+		this.headRotationOffsetX = config?.headRotationOffsetX ?? 0;
 	}
 
 	override predict( source:TexImageSource, drawingUtils:DrawingUtils ){
@@ -217,20 +220,20 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 		const v = new THREE.Vector3();
 		const v2 = new THREE.Vector3();
 
-		const syncBone = ( delta:number, bone:THREE.Object3D|undefined, from:MarkKey, to:MarkKey, sideAxis:THREE.Vector3, poleAxis:LookAtPoleAxis ) => {
+		const syncBone = ( delta:number, bone:THREE.Object3D|undefined, from:MarkKey, to:MarkKey, sideAxis:THREE.Vector3, poleAxis:LookAtPoleAxis, extraRotateX = 0 ) => {
 			if( !bone ) return;
 
-			const hipsDir = this.marks[to].getWorldPosition(v).sub(this.marks[from].getWorldPosition(v2)).normalize(); 
+			const hipsDir = this.marks[to].getWorldPosition(v).sub(this.marks[from].getWorldPosition(v2)).normalize();
 
-		  
+
 			rootPosition(lookGoal, bone, rig).add( hipsDir ).applyMatrix4(rig.matrixWorld) ;
-			rootPosition(poleGoal, bone, rig).add( sideAxis ).applyMatrix4(rig.matrixWorld) ; 
+			rootPosition(poleGoal, bone, rig).add( sideAxis ).applyMatrix4(rig.matrixWorld) ;
 
 			const ghost = this.getGhost(bone)
 
 			lookAt(ghost, lookGoal, poleGoal, poleAxis)
 			ghost.rotateX(Math.PI/2)
-			 
+			if (extraRotateX !== 0) ghost.rotateX(extraRotateX);
 
 			ghost.lerp(bone, delta)
 		}
@@ -245,7 +248,7 @@ export class PoseTracker extends Tracker<typeof poseMarks> {
 				syncBone(delta, map.hips, "hips", "torso", sideHips, "+x")
 				syncBone(delta, map.torso, "torso", "neck", sideShoulders, "+x")
 				syncBone(delta, map.neck, "neck", "head", sideHead, "+x")
-				syncBone(delta, map.head, "nose", "forehead", sideHead, "+x")
+				syncBone(delta, map.head, "nose", "forehead", sideHead, "+x", this.headRotationOffsetX * Math.PI / 180)
 		
 				syncBone(delta, map.leftArm, "leftArm", "leftElbow", sideShoulders, "-x")
 				syncBone(delta, map.leftElbow, "leftElbow", "leftWrist", sideShoulders, "-x")

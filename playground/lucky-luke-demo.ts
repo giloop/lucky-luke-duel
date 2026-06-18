@@ -47,7 +47,7 @@ const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in
 const WRIST_ABOVE_ELBOW_DISTANCE = 0.07; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
 const ARM_X_TOLERANCE = 0.07; // Step 2 guard: wrist must be this much closer to camera than elbow (normalized z) to count as arm pointing toward camera
 const USE_WEBCAM_BY_DEFAULT = true;
-const HEAD_ROTATION_OFFSET_X = 10; // degrees, extra rotation applied to the head bone around its local X axis
+const HEAD_ROTATION_OFFSET_X = 45; // degrees, extra rotation applied to the head bone around its local X axis
 
 export const luckyLukeDemo: DemoHandler = {
     name: "lucky-luke-demo",
@@ -56,6 +56,7 @@ export const luckyLukeDemo: DemoHandler = {
         ignoreFace: true,
         ignoreHands: true,
         smoothLandmarks: true,
+        headRotationOffsetX: HEAD_ROTATION_OFFSET_X,
         debugVideo: import.meta.env.BASE_URL + "Lucky-luke.mp4"
     },
     setup: (
@@ -643,7 +644,6 @@ export const luckyLukeDemo: DemoHandler = {
         // Foot bones — needed for floor-snapping
         let footL: Object3D | undefined;
         let footR: Object3D | undefined;
-        let headBone: Object3D | undefined;
 
         let legL: Object3D | undefined;
         let legR: Object3D | undefined;
@@ -706,7 +706,6 @@ export const luckyLukeDemo: DemoHandler = {
             upperArmR = root.getObjectByName("upper_armR");
             footL = root.getObjectByName("footL");
             footR = root.getObjectByName("footR");
-            headBone = root.getObjectByName("head");
             legL = root.getObjectByName("thighL");
             legR = root.getObjectByName("thighR");
             gunL = root.getObjectByName("Gun-L");
@@ -1096,7 +1095,6 @@ export const luckyLukeDemo: DemoHandler = {
 
             } else if (detected) {
                 lukeBind?.update(delta);
-                if (headBone) headBone.rotateX(HEAD_ROTATION_OFFSET_X * Math.PI / 180);
 
                 // Tuning character position
                 if (modelRoot) {

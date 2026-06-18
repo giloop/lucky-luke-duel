@@ -70,6 +70,12 @@ export type TrackerConfig = {
 	 */
 	smoothLandmarks?:boolean
 
+	/**
+	 * Extra rotation applied to the head bone around its local X axis, in degrees.
+	 * The offset is baked into the lerp target so it does not cause jitter. Default: 0.
+	 */
+	headRotationOffsetX?:number
+
 };
 
 export interface BindingHandler {
@@ -132,6 +138,7 @@ export async function setupTracker(config?: Partial<TrackerConfig>) : Promise<Tr
 		modelPath: $cfg.modelPaths.pose!,
 		drawLandmarks: $cfg.drawLandmarksOverlay,
 		smooth: $cfg.smoothLandmarks,
+		headRotationOffsetX: $cfg.headRotationOffsetX,
     });
     const handsTracker = ($cfg.onlyFace || $cfg.ignoreHands) ? undefined : await loadHandTracker(vision, {
         leftWrist: () => poseTracker!.leftWristNormalizedPosition,
