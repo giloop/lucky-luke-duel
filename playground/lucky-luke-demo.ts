@@ -643,6 +643,7 @@ export const luckyLukeDemo: DemoHandler = {
         // Foot bones — needed for floor-snapping
         let footL: Object3D | undefined;
         let footR: Object3D | undefined;
+        let headBone: Object3D | undefined;
 
         let legL: Object3D | undefined;
         let legR: Object3D | undefined;
@@ -705,6 +706,7 @@ export const luckyLukeDemo: DemoHandler = {
             upperArmR = root.getObjectByName("upper_armR");
             footL = root.getObjectByName("footL");
             footR = root.getObjectByName("footR");
+            headBone = root.getObjectByName("head");
             legL = root.getObjectByName("thighL");
             legR = root.getObjectByName("thighR");
             gunL = root.getObjectByName("Gun-L");
@@ -975,9 +977,9 @@ export const luckyLukeDemo: DemoHandler = {
         const CAMERA_ANIM_DURATION = 1.5; // seconds
         const camPosIn  = new Vector3(0, 0.9, 0.55); // (0, 0.84, 0.51); // 
         
-        const camPosOut = new Vector3(-1.54, 1.59, -1.45);
+        const camPosOut = new Vector3( -1.12, 0.54, -0.96 ); // (-1.54, 1.59, -1.45); // 
         const camLookIn  = new Vector3(0, 0.9, 3.0); // (0, 0.5, 3); // 
-        const camLookOut = new Vector3(0, 0.88, 3.05); 
+        const camLookOut = new Vector3(0.04, 0.95, 2.27); // (0, 0.88, 3.05);  // 
         const _camLerp = new Vector3();
         let cameraT = 0;       // 0 = "in" (detected), 1 = "out" (no detection)
         let cameraTarget = 0;
@@ -1094,6 +1096,7 @@ export const luckyLukeDemo: DemoHandler = {
 
             } else if (detected) {
                 lukeBind?.update(delta);
+                if (headBone) headBone.rotateX(HEAD_ROTATION_OFFSET_X * Math.PI / 180);
 
                 // Tuning character position
                 if (modelRoot) {
