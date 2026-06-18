@@ -11,16 +11,19 @@ importers:
       '@mediapipe/tasks-vision':
         specifier: ^0.10.32
         version: 0.10.32
-      '@tweenjs/tween.js':
-        specifier: ^25.0.0
-        version: 25.0.0
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
       three:
         specifier: ^0.183.1
         version: 0.183.1
+      three-csg-ts:
+        specifier: ^3.2.0
+        version: 3.2.0(@types/three@0.183.1)(three@0.183.1)
     devDependencies:
+      '@tweenjs/tween.js':
+        specifier: ^25.0.0
+        version: 25.0.0
       '@types/node':
         specifier: ^25.3.3
         version: 25.3.3
@@ -730,6 +733,12 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
+  three-csg-ts@3.2.0:
+    resolution: {integrity: sha512-oTYg8kdal6qgHDbso/6VzA12Udf2ic2uXhf0XlJzuSP+Gs0OUR5gTHSZ7GotAE+M/QcVlw41eOwiWZVnJG5/8w==}
+    peerDependencies:
+      '@types/three': '>= 0.154.0'
+      three: '>= 0.154.0'
+
   three@0.183.1:
     resolution: {integrity: sha512-Psv6bbd3d/M/01MT2zZ+VmD0Vj2dbWTNhfe4CuSg7w5TuW96M3NOyCVuh9SZQ05CpGmD7NEcJhZw4GVjhCYxfQ==}
 
@@ -1414,6 +1423,11 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  three-csg-ts@3.2.0(@types/three@0.183.1)(three@0.183.1):
+    dependencies:
+      '@types/three': 0.183.1
+      three: 0.183.1
 
   three@0.183.1: {}
 

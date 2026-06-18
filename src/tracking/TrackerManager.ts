@@ -69,6 +69,7 @@ export type TrackerConfig = {
 	 * Reduces jitter at the cost of slight latency. Default: false.
 	 */
 	smoothLandmarks?:boolean
+
 };
 
 export interface BindingHandler {
