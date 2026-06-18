@@ -42,7 +42,7 @@ import { ShaderLib } from "three";
 
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-shoot.glb"; // "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
 const WRIST_ABOVE_ELBOW_DISTANCE = 0.07; // distance threshold for detecting wrist above elbow in duel mode (in normalized landmark space)
 const ARM_X_TOLERANCE = 0.07; // Step 2 guard: wrist must be this much closer to camera than elbow (normalized z) to count as arm pointing toward camera
@@ -179,7 +179,12 @@ export const luckyLukeDemo: DemoHandler = {
             if (loadedCount < TOTAL_ASSETS) return;
             document.getElementById('loading-track')!.style.display = 'none';
             startBtn.style.display = 'block';
-            startBtn.addEventListener('click', () => loadingOverlay.remove(), { once: true });
+            startBtn.addEventListener('click', () => {
+                loadingOverlay.remove();
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                }
+            }, { once: true });
         };
 
         // — Production mode checkbox —
@@ -976,9 +981,9 @@ export const luckyLukeDemo: DemoHandler = {
         const CAMERA_ANIM_DURATION = 1.5; // seconds
         const camPosIn  = new Vector3(0, 0.9, 0.55); // (0, 0.84, 0.51); // 
         
-        const camPosOut = new Vector3( -1.12, 0.54, -0.96 ); // (-1.54, 1.59, -1.45); // 
+        const camPosOut = new Vector3(-1.51, 0.57, -2.7); // -1.12, 0.54, -0.96 ); // (-1.54, 1.59, -1.45); // 
         const camLookIn  = new Vector3(0, 0.9, 3.0); // (0, 0.5, 3); // 
-        const camLookOut = new Vector3(0.04, 0.95, 2.27); // (0, 0.88, 3.05);  // 
+        const camLookOut = new Vector3(-0.26, 1.06, 2.33); // (0.04, 0.95, 2.27); // (0, 0.88, 3.05);  // 
         const _camLerp = new Vector3();
         let cameraT = 0;       // 0 = "in" (detected), 1 = "out" (no detection)
         let cameraTarget = 0;
