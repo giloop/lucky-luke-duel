@@ -40,7 +40,7 @@ import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 import { ShaderLib } from "three";
 
-const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-shoot.glb"; // "Lucky-Luke-simplified.glb";
+const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-all.glb"; // "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
 const DEBUG_MODE = true;
 const GUN_GRAB_DISTANCE = 0.075; // distance threshold for detecting gun grab in duel mode (in normalized landmark space)
