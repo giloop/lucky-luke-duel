@@ -179,6 +179,7 @@ export const luckyLukeDemo: DemoHandler = {
             if (loadedCount < TOTAL_ASSETS) return;
             document.getElementById('loading-track')!.style.display = 'none';
             startBtn.style.display = 'block';
+            startBtn.focus();
             startBtn.addEventListener('click', () => {
                 loadingOverlay.remove();
                 if (document.documentElement.requestFullscreen) {
@@ -979,11 +980,11 @@ export const luckyLukeDemo: DemoHandler = {
 
         // — Camera zoom animation —
         const CAMERA_ANIM_DURATION = 1.5; // seconds
-        const camPosIn  = new Vector3(0, 0.9, 0.55); // (0, 0.84, 0.51); // 
+        const camPosIn  = new Vector3(0, 0.9, 0.5); // (0, 0.84, 0.51); // 
         
-        const camPosOut = new Vector3(-1.51, 0.57, -2.7); // -1.12, 0.54, -0.96 ); // (-1.54, 1.59, -1.45); // 
-        const camLookIn  = new Vector3(0, 0.9, 3.0); // (0, 0.5, 3); // 
-        const camLookOut = new Vector3(-0.26, 1.06, 2.33); // (0.04, 0.95, 2.27); // (0, 0.88, 3.05);  // 
+        const camPosOut = new Vector3(-1.03, 0.57, -2.82); // -1.12, 0.54, -0.96 ); // (-1.54, 1.59, -1.45); // 
+        const camLookIn  = new Vector3(0, 1.0, 3.0); // (0, 0.5, 3); // 
+        const camLookOut = new Vector3(-0.25, 1.05, 2.21); // (0.04, 0.95, 2.27); // (0, 0.88, 3.05);  // 
         const _camLerp = new Vector3();
         let cameraT = 0;       // 0 = "in" (detected), 1 = "out" (no detection)
         let cameraTarget = 0;
