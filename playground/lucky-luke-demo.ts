@@ -278,13 +278,13 @@ export const luckyLukeDemo: DemoHandler = {
         poseSettings.add({
             logDetection: () => {
                 if (tracker.poseTracker?.detected) {
-                    console.log(tracker.poseTracker.lastResult);
-                    console.log("Hips center world position:", tracker.poseTracker.getMarkWorldPosition("hips"));
-                    console.log("Hips center landmark position:", tracker.poseTracker.getMarkPosition("hips"));
-                    console.log("Torso center world position:", tracker.poseTracker.getMarkWorldPosition("torso"));
-                    console.log("Torso center landmark position:", tracker.poseTracker.getMarkPosition("torso"));
+                    // console.log(tracker.poseTracker.lastResult);
+                    // console.log("Hips center world position:", tracker.poseTracker.getMarkWorldPosition("hips"));
+                    // console.log("Hips center landmark position:", tracker.poseTracker.getMarkPosition("hips"));
+                    // console.log("Torso center world position:", tracker.poseTracker.getMarkWorldPosition("torso"));
+                    // console.log("Torso center landmark position:", tracker.poseTracker.getMarkPosition("torso"));
                 } else {
-                    console.log("No detection");
+                    // console.log("No detection");
                 }
             }
         }, "logDetection").name("Log detection");
@@ -312,10 +312,10 @@ export const luckyLukeDemo: DemoHandler = {
         // });
         modelPanel.add({
             logCamera: () => {
-                console.log("Camera position:", camera.position.toArray().map(n => +n.toFixed(2)));
-                console.log("Camera lookAt (target):", ctrl.target.toArray().map(n => +n.toFixed(2)));
-                console.log("Camera look direction:", camera.getWorldDirection(new Vector3()).toArray().map(n => +n.toFixed(2)));
-                console.log("Camera rotation (deg):", [camera.rotation.x, camera.rotation.y, camera.rotation.z].map(r => +(r * 180 / Math.PI).toFixed(1)));
+                // console.log("Camera position:", camera.position.toArray().map(n => +n.toFixed(2)));
+                // console.log("Camera lookAt (target):", ctrl.target.toArray().map(n => +n.toFixed(2)));
+                // console.log("Camera look direction:", camera.getWorldDirection(new Vector3()).toArray().map(n => +n.toFixed(2)));
+                // console.log("Camera rotation (deg):", [camera.rotation.x, camera.rotation.y, camera.rotation.z].map(r => +(r * 180 / Math.PI).toFixed(1)));
             }
         }, "logCamera").name("Log camera");
         modelPanel
@@ -400,7 +400,7 @@ export const luckyLukeDemo: DemoHandler = {
         const duelCountEl = document.getElementById('duel-count') as HTMLElement;
 
         function startDuel() {
-            console.log("startDuel"); // , { duelMode, duelCountdown, mixer }); // 
+            // console.log("startDuel"); // , { duelMode, duelCountdown, mixer }); //
 
             if (duelMode || duelCountdown || !mixer) return; // ignore if already in duel mode, or if countdown is in progress, or if mixer is not ready
             duelMode = true;
@@ -435,7 +435,7 @@ export const luckyLukeDemo: DemoHandler = {
                 } else {
                     clearInterval(tick);
                     duelCountEl.textContent = 'Tire !';
-                    console.log("Décompte terminé, détection du tir activée ...");
+                    // console.log("Décompte terminé, détection du tir activée ...");
                     duelCountdown = false;
                     setTimeout(() => { duelCountdownEl.style.display = 'none';  }, 500);
                     playLuckyShoot();
@@ -492,13 +492,13 @@ export const luckyLukeDemo: DemoHandler = {
             const capturedGunBack   = luckyGunBackAction!;
             const capturedVictory   = victoryAction!;
 
-            console.log({ luckyShootAction, capturedRigBack, capturedGunBack, capturedVictory });
+            // console.log({ luckyShootAction, capturedRigBack, capturedGunBack, capturedVictory });
 
             // Trigger des actions à la fin de chaque animation de tir de Lucky pour gérer les différents cas 
             // (tir normal, tir interrompu par le joueur, fin de l'animation de victoire)
             const onLuckyWin = (e: { action: AnimationAction }) => {
 
-                console.log("Animation finished during Lucky's shoot sequence:", e.action.getClip().name);
+                // console.log("Animation finished during Lucky's shoot sequence:", e.action.getClip().name);
                 if (!luckyWinPlaying) return; // player drew first — already cancelled
 
                 if (e.action === luckyShootAction) {
@@ -506,7 +506,7 @@ export const luckyLukeDemo: DemoHandler = {
                     luckyWins = true;
                     playOneShot(gunShotBuffer);
 
-                    console.log("Lucky shoot finished, rangement du gun ...");
+                    // console.log("Lucky shoot finished, rangement du gun ...");
                     capturedGunBack.setLoop(LoopOnce, 1);
                     capturedGunBack.clampWhenFinished = true;
                     capturedGunBack.reset().play();
@@ -521,7 +521,7 @@ export const luckyLukeDemo: DemoHandler = {
 
                 } else if (e.action === capturedGunBack) {
 
-                    console.log("Rangement du gun finished, victoire ...");
+                    // console.log("Rangement du gun finished, victoire ...");
 
                     capturedGunBack.stop();
                     capturedRigBack.stop();
@@ -540,7 +540,7 @@ export const luckyLukeDemo: DemoHandler = {
                     // Fin de la séquence Lucky wins
                     mixer!.removeEventListener('finished', onLuckyWin);
                     
-                    console.log("Victory finished, reset state ...");
+                    // console.log("Victory finished, reset state ...");
                     initgunsPosition();
 
                     // After victory animation, reset state to detection mode
@@ -620,7 +620,7 @@ export const luckyLukeDemo: DemoHandler = {
                     if (e.action !== currentAction) { console.warn("Unexpected action finished", e.action); return; }
                     mixer!.removeEventListener('finished', onGetUpFinished);
 
-                    console.log("finie ... reset state du duel...");
+                    // console.log("finie ... reset state du duel...");
                     
                     hideBulletHole();
                     duelMode = false;
@@ -828,9 +828,9 @@ export const luckyLukeDemo: DemoHandler = {
                 const armFacingL = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
                 const armLUp = _posA.y < _posC.y; // - WRIST_ABOVE_ELBOW_DISTANCE;
 
-                console.log('Left wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:', (_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'ArmLUp:', armLUp);
+                // console.log('Left wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:', (_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'ArmLUp:', armLUp);
                 if (armLUp && armFacingL && !gunLWasUp) {
-                    console.log('Shoot L detected !');
+                    // console.log('Shoot L detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
                     return;
@@ -841,7 +841,7 @@ export const luckyLukeDemo: DemoHandler = {
                 const closeL = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
                 // console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeL);
                 if (closeL && !gunLWasClose) {
-                    console.log('Gun L grabbed !');
+                    // console.log('Gun L grabbed !');
                     duelGunGrabbedL = true;
                     return;
                 }
@@ -859,9 +859,9 @@ export const luckyLukeDemo: DemoHandler = {
                 // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
                 const armFacingR = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
                 const armRUp = _posA.y < _posC.y; // - WRIST_ABOVE_ELBOW_DISTANCE;
-                console.log('Right wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'up:', armRUp);
+                // console.log('Right wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'up:', armRUp);
                 if (armRUp && armFacingR && !gunRWasUp) {
-                    console.log('Shoot R detected !');
+                    // console.log('Shoot R detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
                     return;
@@ -872,7 +872,7 @@ export const luckyLukeDemo: DemoHandler = {
                 const closeR = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
                 // console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeR);
                 if (closeR && !gunRWasClose) {
-                    console.log('Gun R grabbed !');
+                    // console.log('Gun R grabbed !');
                     duelGunGrabbedR = true;
                     return;
                 }
@@ -934,7 +934,7 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction.setLoop(LoopOnce, 1);
             currentAction.clampWhenFinished = true;
 
-            console.log("Playing next animation:", clips[next].name);
+            // console.log("Playing next animation:", clips[next].name);
 
             if (prevAction) {
                 // warping:false avoids modifying timeScale on either action —
@@ -1041,10 +1041,10 @@ export const luckyLukeDemo: DemoHandler = {
                 // - Duel mode -
                 if (wasDetected && !detected) {
                     if (duelLayIdlePlaying) {
-                        console.log("Person disappeared during duel, waiting for reset till animations end...");                        
+                        // console.log("Person disappeared during duel, waiting for reset till animations end...");
                     } else {
                         // Person disappeared during the duel — reset everything
-                        console.log("Person disappeared during duel, resetting state");
+                        // console.log("Person disappeared during duel, resetting state");
                         duelMode = false;
                         duelCountdown = false;
                         duelGunTriggered = false;
