@@ -890,7 +890,7 @@ export const luckyLukeDemo: DemoHandler = {
             const lwPos = pt.getNormalizedMarkPosition('leftWrist' as any, _posA);
             const rwPos = pt.getNormalizedMarkPosition('rightWrist' as any, _posB);
             const handsAbove = lwPos.y < headPos.y && rwPos.y < headPos.y; 
-            const handsTouching = true; // Math.abs(lwPos.x - rwPos.x) < 0.1; // 
+            const handsTouching = Math.abs(lwPos.x - rwPos.x) < 0.1; // true; // 
             if (handsAbove && handsTouching && !handsAboveEyeWas) startDuel();
             handsAboveEyeWas = handsAbove && handsTouching;
         }
