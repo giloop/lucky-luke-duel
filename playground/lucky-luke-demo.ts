@@ -404,10 +404,10 @@ export const luckyLukeDemo: DemoHandler = {
 
             if (duelMode || duelCountdown || !mixer) return; // ignore if already in duel mode, or if countdown is in progress, or if mixer is not ready
             duelMode = true;
+            duelCountdown = true;
             duelShootDetected = false;
             duelGunGrabbedL = false;
             duelGunGrabbedR = false;
-            duelCountdown = true;
             duelGunTriggered = false;
             luckyWins = false;
 
@@ -437,9 +437,9 @@ export const luckyLukeDemo: DemoHandler = {
                     duelCountEl.textContent = 'Tire !';
                     console.log("Décompte terminé, détection du tir activée ...");
                     duelCountdown = false;
-                    playLuckyShoot();
-                        
                     setTimeout(() => { duelCountdownEl.style.display = 'none';  }, 500);
+                    playLuckyShoot();
+                    
                 }
             }, 1000);
         }
@@ -467,7 +467,7 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction = undefined;
 
             // slow down Lucky's shoot animation to give the player a chance to draw first
-            const timeScale = 0.9; 
+            const timeScale = 0.5; 
 
             luckyRigAction = mixer.clipAction(rigClip);
             luckyRigAction.setLoop(LoopOnce, 1);
@@ -506,11 +506,6 @@ export const luckyLukeDemo: DemoHandler = {
                     luckyWins = true;
                     playOneShot(gunShotBuffer);
 
-                    // Stop the shoot actions so they don't fight the back animations
-                    // (clampWhenFinished keeps them at weight=1 which conflicts with the next clips)
-                    luckyRigAction?.stop();
-                    luckyGunAction?.stop();
-
                     console.log("Lucky shoot finished, rangement du gun ...");
                     capturedGunBack.setLoop(LoopOnce, 1);
                     capturedGunBack.clampWhenFinished = true;
@@ -519,6 +514,10 @@ export const luckyLukeDemo: DemoHandler = {
                     capturedRigBack.setLoop(LoopOnce, 1);
                     capturedRigBack.clampWhenFinished = true;
                     capturedRigBack.reset().play();
+
+                    // Cross-fade instead of stop() to avoid a 1-frame bind-pose flash
+                    luckyGunAction!.crossFadeTo(capturedGunBack, 0.15, false);
+                    luckyRigAction!.crossFadeTo(capturedRigBack, 0.15, false);
 
                 } else if (e.action === capturedGunBack) {
 
@@ -671,8 +670,10 @@ export const luckyLukeDemo: DemoHandler = {
         
 
         // Rising-edge flags for duel gun-grab detection
-        let gunLWasClose = false;
-        let gunRWasClose = false;
+        let gunLWasClose = false; // Gun was close to hip in previous frame
+        let gunRWasClose = false; // Gun was close to hip in previous frame
+        let gunLWasUp = false; // Gun was raised above elbow in previous frame
+        let gunRWasUp = false; // Gun was raised above elbow in previous frame
 
         // In duelMode, detect if the player has triggered a shot — rising edge only        
         let duelGunGrabbedL = false; // 1: Grab gun at hip level,
@@ -808,7 +809,7 @@ export const luckyLukeDemo: DemoHandler = {
         let lastRightWristPos = new Vector3();
 
         function detectGunGrabDuel() {
-            if (duelShootDetected) return;
+            if (duelShootDetected || duelCountdown) return;
             const pt = tracker.poseTracker;
             if (!pt) return;
 
@@ -825,16 +826,16 @@ export const luckyLukeDemo: DemoHandler = {
                 // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow)
                 // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
                 const armFacingL = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
-                const closeL = _posA.y > _posC.y - WRIST_ABOVE_ELBOW_DISTANCE;
+                const armLUp = _posA.y < _posC.y; // - WRIST_ABOVE_ELBOW_DISTANCE;
 
-                console.log('Left wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:', Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'close:', closeL);
-                if (closeL && armFacingL && !gunLWasClose) {
+                console.log('Left wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:', (_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'ArmLUp:', armLUp);
+                if (armLUp && armFacingL && !gunLWasUp) {
                     console.log('Shoot L detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
                     return;
                 }
-                gunLWasClose = closeL;
+                gunLWasUp = armLUp && armFacingL;
             } else {
                 // Step 1 : detect grab (wrist close to leg)
                 const closeL = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
@@ -857,15 +858,15 @@ export const luckyLukeDemo: DemoHandler = {
                 // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow)
                 // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
                 const armFacingR = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
-                const closeR = _posA.y > _posC.y - WRIST_ABOVE_ELBOW_DISTANCE;
-                console.log('Right wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'close:', closeR);
-                if (closeR && armFacingR && !gunRWasClose) {
+                const armRUp = _posA.y < _posC.y; // - WRIST_ABOVE_ELBOW_DISTANCE;
+                console.log('Right wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'up:', armRUp);
+                if (armRUp && armFacingR && !gunRWasUp) {
                     console.log('Shoot R detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
                     return;
                 }
-                gunRWasClose = closeR;
+                gunRWasUp = armRUp && armFacingR;
             } else {
                 // Step 1 : detect grab (wrist close to leg)
                 const closeR = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
@@ -889,7 +890,7 @@ export const luckyLukeDemo: DemoHandler = {
             const lwPos = pt.getNormalizedMarkPosition('leftWrist' as any, _posA);
             const rwPos = pt.getNormalizedMarkPosition('rightWrist' as any, _posB);
             const handsAbove = lwPos.y < headPos.y && rwPos.y < headPos.y; 
-            const handsTouching = Math.abs(lwPos.x - rwPos.x) < 0.1;
+            const handsTouching = true; // Math.abs(lwPos.x - rwPos.x) < 0.1; // 
             if (handsAbove && handsTouching && !handsAboveEyeWas) startDuel();
             handsAboveEyeWas = handsAbove && handsTouching;
         }

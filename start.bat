@@ -1,3 +1,4 @@
 @echo off
 cd /d "%~dp0"
-npx vite --config vite.dev.config.ts
+REM npx vite --config vite.dev.config.ts
+pnpm preview
