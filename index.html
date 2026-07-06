@@ -72,6 +72,22 @@
         letter-spacing: 0.04em;
       }
 
+      #shutdown-btn {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        font-size: 10px;
+        line-height: 12px;
+        background: #fff;
+        color: #000;
+        border: none;
+        cursor: pointer;
+        overflow: hidden;
+        z-index: 9999;
+      }
       #duel-countdown {
         display: none;
         position: fixed;
@@ -102,7 +118,8 @@
       </div>
       <button id="start-btn">Start !</button>
     </div>
-    <div id="duel-countdown">5<span id="duel-count"></span></div>
+    <div id="duel-countdown"><span id="duel-count"></span></div>
+    <button id="shutdown-btn" onclick="fetch('/api/shutdown',{method:'POST'})">⏻</button>
     <script type="module" src="/playground/main.ts"></script>
   </body>
 </html>

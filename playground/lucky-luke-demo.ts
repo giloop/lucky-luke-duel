@@ -400,7 +400,7 @@ export const luckyLukeDemo: DemoHandler = {
         const duelCountEl = document.getElementById('duel-count') as HTMLElement;
 
         function startDuel() {
-            console.log("startDuel", { duelMode, duelCountdown, mixer });
+            console.log("startDuel"); // , { duelMode, duelCountdown, mixer }); // 
 
             if (duelMode || duelCountdown || !mixer) return; // ignore if already in duel mode, or if countdown is in progress, or if mixer is not ready
             duelMode = true;
@@ -466,15 +466,18 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction?.stop();
             currentAction = undefined;
 
+            // slow down Lucky's shoot animation to give the player a chance to draw first
+            const timeScale = 0.9; 
+
             luckyRigAction = mixer.clipAction(rigClip);
             luckyRigAction.setLoop(LoopOnce, 1);
             luckyRigAction.clampWhenFinished = true;
-            luckyRigAction.reset().play();
+            luckyRigAction.reset().setEffectiveTimeScale(timeScale).play();
 
             luckyGunAction = mixer.clipAction(gunClip);
             luckyGunAction.setLoop(LoopOnce, 1);
             luckyGunAction.clampWhenFinished = true;
-            luckyGunAction.reset().play();
+            luckyGunAction.reset().setEffectiveTimeScale(timeScale).play();
 
             luckyWinPlaying = true;
 
@@ -822,8 +825,9 @@ export const luckyLukeDemo: DemoHandler = {
                 // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow)
                 // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
                 const armFacingL = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
-                const closeL = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
-                // console.log('Left wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:', Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'close:', closeL);
+                const closeL = _posA.y > _posC.y - WRIST_ABOVE_ELBOW_DISTANCE;
+
+                console.log('Left wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:', Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'close:', closeL);
                 if (closeL && armFacingL && !gunLWasClose) {
                     console.log('Shoot L detected !');
                     duelShootDetected = true;
@@ -853,8 +857,8 @@ export const luckyLukeDemo: DemoHandler = {
                 // Step 2 : grab detected, now wait for the hand to be raised (wrist above elbow)
                 // AND arm pointing toward camera (wrist x < elbow x by ARM_X_TOLERANCE)
                 const armFacingR = Math.abs(_posA.x - _posC.x) < ARM_X_TOLERANCE;
-                const closeR = Math.abs(_posA.y - _posC.y) < WRIST_ABOVE_ELBOW_DISTANCE;
-                // console.log('Right wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'close:', closeR);
+                const closeR = _posA.y > _posC.y - WRIST_ABOVE_ELBOW_DISTANCE;
+                console.log('Right wrist/elbow Δy:', Math.abs(_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'close:', closeR);
                 if (closeR && armFacingR && !gunRWasClose) {
                     console.log('Shoot R detected !');
                     duelShootDetected = true;
@@ -884,9 +888,10 @@ export const luckyLukeDemo: DemoHandler = {
             const headPos = pt.getNormalizedMarkPosition('head' as any, _posC);
             const lwPos = pt.getNormalizedMarkPosition('leftWrist' as any, _posA);
             const rwPos = pt.getNormalizedMarkPosition('rightWrist' as any, _posB);
-            const handsAbove = lwPos.y < headPos.y - 0.1 && rwPos.y < headPos.y - 0.1; // false; //
-            if (handsAbove && !handsAboveEyeWas) startDuel();
-            handsAboveEyeWas = handsAbove;
+            const handsAbove = lwPos.y < headPos.y && rwPos.y < headPos.y; 
+            const handsTouching = Math.abs(lwPos.x - rwPos.x) < 0.1;
+            if (handsAbove && handsTouching && !handsAboveEyeWas) startDuel();
+            handsAboveEyeWas = handsAbove && handsTouching;
         }
 
         function toggleAnimation() {
