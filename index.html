@@ -120,6 +120,21 @@
     </div>
     <div id="duel-countdown"><span id="duel-count"></span></div>
     <button id="shutdown-btn" onclick="fetch('/api/shutdown',{method:'POST'})">⏻</button>
+    <style>
+      html.hide-cursor, html.hide-cursor * { cursor: none !important; }
+    </style>
+    <script>
+      let _cursorTimer;
+      function _showCursor() {
+        document.documentElement.classList.remove('hide-cursor');
+        clearTimeout(_cursorTimer);
+        _cursorTimer = setTimeout(() => {
+          document.documentElement.classList.add('hide-cursor');
+        }, 3000);
+      }
+      window.addEventListener('mousemove',  _showCursor, true);
+      _showCursor();
+    </script>
     <script type="module" src="/playground/main.ts"></script>
   </body>
 </html>
