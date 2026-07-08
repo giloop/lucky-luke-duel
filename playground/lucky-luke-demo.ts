@@ -57,7 +57,10 @@ export const luckyLukeDemo: DemoHandler = {
         ignoreHands: true,
         smoothLandmarks: true,
         headRotationOffsetX: HEAD_ROTATION_OFFSET_X,
-        debugVideo: import.meta.env.BASE_URL + "Lucky-luke.mp4"
+        debugVideo: import.meta.env.BASE_URL + "Lucky-luke.mp4",
+        modelPaths: {
+            vision: import.meta.env.BASE_URL + "wasm",
+        },
     },
     setup: (
         renderer: WebGPURenderer,
@@ -467,7 +470,7 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction = undefined;
 
             // slow down Lucky's shoot animation to give the player a chance to draw first
-            const timeScale = 0.5; 
+            const timeScale = 0.75 + Math.random() * 0.5; // 0.5; // random speed between 0.75x and 1.25x
 
             luckyRigAction = mixer.clipAction(rigClip);
             luckyRigAction.setLoop(LoopOnce, 1);

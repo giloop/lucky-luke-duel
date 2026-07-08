@@ -123,13 +123,14 @@ export async function setupTracker(config?: Partial<TrackerConfig>) : Promise<Tr
 		onlyFace: false,
 		ignoreHands: false,
 		drawLandmarksOverlay:true,
+        ...config,
 		modelPaths: {
 			vision: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm",
 			pose: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
 			hand: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
 			face: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+			...config?.modelPaths,
 		},
-        ...config,
     };
     let video: HTMLVideoElement | undefined;
     const vision = await FilesetResolver.forVisionTasks( $cfg.modelPaths.vision ?? "/wasm" );

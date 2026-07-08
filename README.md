@@ -20,6 +20,14 @@ Arriverez-vous à tirer plus vite que votre ombre ?
 pnpm install
 ```
 
+**wasm** : à télécharger/copier dans le dossier `public/wasm`
+
+```bash
+cp -r "./node_modules/@mediapipe/tasks-vision/wasm" "./public/wasm"
+```
+
+**model mediapipe** : Les modèles de détection sont téléchargés en local dans le dossier `models` pour faire fonctionner l'application. Les liens sont disponibles sur la page [mediapipe](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker?hl=fr).
+
 ### Mode développement
 
 Démarre le serveur Vite avec rechargement à chaud sur [http://localhost:3000/lucky-luke-duel/](http://localhost:3000/lucky-luke-duel/) :
@@ -49,7 +57,6 @@ start.bat
 
 L'application est basée sur la librairie de [Bandinopla](https://bandinopla.github.io/) permettant de mapper un modèle 3D dans une scène ThreeJs au squelette détecté par les modèles d'IA [mediapipe](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker?hl=fr)
 
-Les modèles de détection sont téléchargés en local dans le dossier `models` pour faire fonctionner l'application. Les liens sont disponibles sur la page mediapipe ci-dessus.
 Pour utiliser les modèles en ligne, modifier le fichier `PoseTrakcer.ts`, l.13, vers `...PoseLandmarker.createFromOptions...`
 
 ```js
