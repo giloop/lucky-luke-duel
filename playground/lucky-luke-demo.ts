@@ -531,7 +531,7 @@ export const luckyLukeDemo: DemoHandler = {
 
                     // Message
                     duelCountdownEl.style.display = 'flex';
-                    duelCountEl.innerHTML = 'Lucky<br>gagne !';
+                    duelCountEl.innerHTML = 'Perdu !';
                     setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
                 } else if (e.action === capturedVictory) {
