@@ -3,7 +3,7 @@ import {
     AnimationClip,
     AnimationMixer,
     LoopOnce,
-    AudioLoader,
+
     AxesHelper,
     BufferAttribute,
     BufferGeometry,
@@ -172,23 +172,16 @@ export const luckyLukeDemo: DemoHandler = {
         // — Loading overlay —
         const loadingOverlay = document.getElementById('loading-overlay')!;
         const progressFill = document.getElementById('loading-fill') as HTMLElement;
-        const startBtn = document.getElementById('start-btn') as HTMLElement;
 
-        const TOTAL_ASSETS = 3; // animations.glb + Lucky-Luke-shoot.glb 4 + Gunshot.mp3 + model
+        const TOTAL_ASSETS = 3; // Lucky-Luke-shoot.glb + Gunshot.mp3 + model
         let loadedCount = 0;
         const onAssetLoaded = () => {
             loadedCount++;
             progressFill.style.width = `${(loadedCount / TOTAL_ASSETS) * 100}%`;
             if (loadedCount < TOTAL_ASSETS) return;
-            document.getElementById('loading-track')!.style.display = 'none';
-            startBtn.style.display = 'block';
-            startBtn.focus();
-            startBtn.addEventListener('click', () => {
-                loadingOverlay.remove();
-                if (document.documentElement.requestFullscreen) {
-                    document.documentElement.requestFullscreen();
-                }
-            }, { once: true });
+            audioCtx.resume();
+            loadingOverlay.remove();
+            document.documentElement.requestFullscreen?.().catch(() => {});
         };
 
         // — Production mode checkbox —
@@ -369,17 +362,19 @@ export const luckyLukeDemo: DemoHandler = {
 
         // — Audio —
 
-        let audioCtx: AudioContext | undefined;
+        // Audio context created once — resumed at Start button click to avoid first-play latency
+        const audioCtx = new AudioContext();
 
         let gunShotBuffer: AudioBuffer | undefined;
-        new AudioLoader().loadAsync(import.meta.env.BASE_URL + "Gunshot.mp3")
-            .then((buf) => { gunShotBuffer = buf; })
-            .catch((err) => console.warn("Could not load Gunshot.mp3:", err))
+        fetch(import.meta.env.BASE_URL + "Gunshot.mp3")
+            .then(r => r.arrayBuffer())
+            .then(buf => audioCtx.decodeAudioData(buf))
+            .then(decoded => { gunShotBuffer = decoded; })
+            .catch(err => console.warn("Could not load Gunshot.mp3:", err))
             .finally(onAssetLoaded);
 
         function playOneShot(buf: AudioBuffer | undefined) {
             if (!buf) return;
-            if (!audioCtx) audioCtx = new AudioContext();
             const src = audioCtx.createBufferSource();
             src.buffer = buf;
             src.connect(audioCtx.destination);
@@ -808,8 +803,8 @@ export const luckyLukeDemo: DemoHandler = {
             return Math.abs(_posA.z - _posB.z) < 0.05;
         }
 
-        let lastLeftWristPos = new Vector3();
-        let lastRightWristPos = new Vector3();
+        // let lastLeftWristPos = new Vector3();
+        // let lastRightWristPos = new Vector3();
 
         function detectGunGrabDuel() {
             if (duelShootDetected || duelCountdown) return;
@@ -833,7 +828,7 @@ export const luckyLukeDemo: DemoHandler = {
 
                 // console.log('Left wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:', (_posA.x - _posC.x).toFixed(2), '— facing:', armFacingL, 'ArmLUp:', armLUp);
                 if (armLUp && armFacingL && !gunLWasUp) {
-                    // console.log('Shoot L detected !');
+                    console.log('Shoot L detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
                     return;
@@ -844,7 +839,7 @@ export const luckyLukeDemo: DemoHandler = {
                 const closeL = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
                 // console.log('Left wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeL);
                 if (closeL && !gunLWasClose) {
-                    // console.log('Gun L grabbed !');
+                    console.log('Gun L grabbed !');
                     duelGunGrabbedL = true;
                     return;
                 }
@@ -864,7 +859,7 @@ export const luckyLukeDemo: DemoHandler = {
                 const armRUp = _posA.y < _posC.y; // - WRIST_ABOVE_ELBOW_DISTANCE;
                 // console.log('Right wrist/elbow Δy:', (_posA.y - _posC.y).toFixed(2), 'Δx:',  Math.abs(_posA.x - _posC.x).toFixed(2), '— facing:', armFacingR, 'up:', armRUp);
                 if (armRUp && armFacingR && !gunRWasUp) {
-                    // console.log('Shoot R detected !');
+                    console.log('Shoot R detected !');
                     duelShootDetected = true;
                     triggerDuelShot();
                     return;
@@ -875,7 +870,7 @@ export const luckyLukeDemo: DemoHandler = {
                 const closeR = dist2D(_posA, _posB) < GUN_GRAB_DISTANCE;
                 // console.log('Right wrist→leg:', dist2D(_posA, _posB).toFixed(2), '— close:', closeR);
                 if (closeR && !gunRWasClose) {
-                    // console.log('Gun R grabbed !');
+                    console.log('Gun R grabbed !');
                     duelGunGrabbedR = true;
                     return;
                 }
@@ -1043,9 +1038,9 @@ export const luckyLukeDemo: DemoHandler = {
 
                 // - Duel mode -
                 if (wasDetected && !detected) {
-                    if (duelLayIdlePlaying) {
+                    // if (duelLayIdlePlaying) {
                         // console.log("Person disappeared during duel, waiting for reset till animations end...");
-                    } else {
+                    // } else {
                         // Person disappeared during the duel — reset everything
                         // console.log("Person disappeared during duel, resetting state");
                         duelMode = false;
@@ -1059,7 +1054,8 @@ export const luckyLukeDemo: DemoHandler = {
                         animationPlaying = false;
                         idleAnimIndex = -1;
                         playNextIdleAnimation();
-                    }   
+                        hideBulletHole(); // to try
+                    // }   
                 }
 
                 // Safety catch: animation ended while nobody was there (e.g. after the
@@ -1071,8 +1067,12 @@ export const luckyLukeDemo: DemoHandler = {
                     duelShootDetected = false;
                     duelGunGrabbedL = false;
                     duelGunGrabbedR = false;
+                    mixer?.stopAllAction();
+                    currentAction = undefined;
+                    animationPlaying = false;
                     idleAnimIndex = -1;
                     playNextIdleAnimation();
+                    hideBulletHole(); // to try
                 }
 
                 // In duel mode : detect shoot after countdown

@@ -57,20 +57,6 @@
         background: #1a1a1a;
         transition: width 0.25s ease;
       }
-      #start-btn {
-        display: none;
-        width: 33vw;
-        padding: 24px 0;
-        font-size: 2rem;
-        font-family: system-ui, sans-serif;
-        font-weight: bold;
-        background: #1a1a1a;
-        color: #fff;
-        border: none;
-        border-radius: 10px;
-        cursor: pointer;
-        letter-spacing: 0.04em;
-      }
 
       #shutdown-btn {
         position: fixed;
@@ -116,7 +102,6 @@
       <div id="loading-track">
         <div id="loading-fill"></div>
       </div>
-      <button id="start-btn">Start !</button>
     </div>
     <div id="duel-countdown"><span id="duel-count"></span></div>
     <button id="shutdown-btn" onclick="fetch('/api/shutdown',{method:'POST'})">⏻</button>
