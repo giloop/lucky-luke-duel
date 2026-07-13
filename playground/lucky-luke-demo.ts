@@ -465,7 +465,7 @@ export const luckyLukeDemo: DemoHandler = {
             currentAction = undefined;
 
             // slow down Lucky's shoot animation to give the player a chance to draw first
-            const timeScale = 0.75 + Math.random() * 0.5; // 0.5; // random speed between 0.75x and 1.25x
+            const timeScale = 0.5 + Math.random() * 0.5; // 0.5; // random speed between 0.75x and 1.25x
 
             luckyRigAction = mixer.clipAction(rigClip);
             luckyRigAction.setLoop(LoopOnce, 1);
@@ -532,7 +532,7 @@ export const luckyLukeDemo: DemoHandler = {
                     // Message
                     duelCountdownEl.style.display = 'flex';
                     duelCountEl.innerHTML = 'Perdu !';
-                    setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
+                    // setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
                 } else if (e.action === capturedVictory) {
                     // Fin de la séquence Lucky wins
@@ -543,6 +543,7 @@ export const luckyLukeDemo: DemoHandler = {
 
                     // After victory animation, reset state to detection mode
                     setTimeout(() => {
+                        duelCountdownEl.style.display = 'none';
                         mixer?.stopAllAction();
                         luckyWinPlaying = false;
                         luckyRigAction = undefined;
@@ -611,7 +612,7 @@ export const luckyLukeDemo: DemoHandler = {
                 // Message
                 duelCountdownEl.style.display = 'flex';
                 duelCountEl.textContent = 'Bravo !';
-                setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
+                // setTimeout(() => { duelCountdownEl.style.display = 'none'; }, 3000);
 
 
                 const onGetUpFinished = (e: { action: AnimationAction }) => {
@@ -621,6 +622,7 @@ export const luckyLukeDemo: DemoHandler = {
                     // console.log("finie ... reset state du duel...");
                     
                     hideBulletHole();
+                    duelCountdownEl.style.display = 'none'; 
                     duelMode = false;
                     duelCountdown = false;
                     duelGunTriggered = false;
