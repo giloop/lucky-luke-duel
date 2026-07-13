@@ -39,6 +39,7 @@ import { Inspector } from "three/examples/jsm/inspector/Inspector.js";
 import { DemoHandler } from "./demo-type";
 import { RecordableBindingHandler, TrackerHandler } from "lucky-luke-duel";
 import { ShaderLib } from "three";
+import { Player, start as toneStart } from "tone";
 
 const DEFAULT_MODEL = import.meta.env.BASE_URL +  "Lucky-Luke-shoot.glb"; // "Lucky-Luke-simplified.glb";
 const X_POSE_ROTATION = -10; // degrees, applied around hips local X axis
@@ -179,7 +180,7 @@ export const luckyLukeDemo: DemoHandler = {
             loadedCount++;
             progressFill.style.width = `${(loadedCount / TOTAL_ASSETS) * 100}%`;
             if (loadedCount < TOTAL_ASSETS) return;
-            audioCtx.resume();
+            toneStart();
             loadingOverlay.remove();
             document.documentElement.requestFullscreen?.().catch(() => {});
         };
@@ -362,24 +363,11 @@ export const luckyLukeDemo: DemoHandler = {
 
         // — Audio —
 
-        // Audio context created once — resumed at Start button click to avoid first-play latency
-        const audioCtx = new AudioContext();
-
-        let gunShotBuffer: AudioBuffer | undefined;
-        fetch(import.meta.env.BASE_URL + "Gunshot.mp3")
-            .then(r => r.arrayBuffer())
-            .then(buf => audioCtx.decodeAudioData(buf))
-            .then(decoded => { gunShotBuffer = decoded; })
-            .catch(err => console.warn("Could not load Gunshot.mp3:", err))
-            .finally(onAssetLoaded);
-
-        function playOneShot(buf: AudioBuffer | undefined) {
-            if (!buf) return;
-            const src = audioCtx.createBufferSource();
-            src.buffer = buf;
-            src.connect(audioCtx.destination);
-            src.start(0);
-        }
+        const gunshotPlayer: Player = new Player({
+            url: import.meta.env.BASE_URL + "Gunshot.mp3",
+            onload: onAssetLoaded,
+            onerror: (err: Error) => { console.warn("Could not load Gunshot.mp3:", err); onAssetLoaded(); },
+        }).toDestination();
 
         // — Duel state —
         let duelMode = false; // true:Duel, false: Détection normale de l'ombre & animation random si pas détecté
@@ -501,8 +489,10 @@ export const luckyLukeDemo: DemoHandler = {
 
                 if (e.action === luckyShootAction) {
                     // Fin du clip lucky-rig-shoot : tir
+                    console.log("Lucky wins !");
                     luckyWins = true;
-                    playOneShot(gunShotBuffer);
+
+                    gunshotPlayer.start();
 
                     // console.log("Lucky shoot finished, rangement du gun ...");
                     capturedGunBack.setLoop(LoopOnce, 1);
@@ -568,8 +558,8 @@ export const luckyLukeDemo: DemoHandler = {
             // Pas de détection si Lucky a tiré avant
             if (!duelMode || duelCountdown || duelGunTriggered || luckyWins || !mixer) return;
             duelGunTriggered = true;
-            
-            playOneShot(gunShotBuffer);
+            console.log("User wins !");
+            gunshotPlayer.start();
             showBulletHole();
 
             // Player drew first — cancel Lucky's shoot animation

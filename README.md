@@ -38,6 +38,8 @@ pnpm dev
 
 ### Mode production locale (preview)
 
+> Ce mode est beaucoup plus efficace pour faire tourner l'application en prod locale.
+
 Build l'application dans le dossier `web/`, puis lance un serveur de preview sur [http://localhost:4173/lucky-luke-duel/](http://localhost:4173/lucky-luke-duel/) :
 
 ```bash
@@ -78,16 +80,55 @@ Le modèle 3D a été énormément simplifié et un rig a été ajouté pour con
 
 Pour des raisons de performances, seul le modèle de "body" est utilisé. Les mains et visages ne sont pas trackées.
 
-## Installer et lancer la démo
-
-```bash
-npm install
-```
-
-```bash
-npm run dev
-```
-
 ## License
 
 MIT
+
+## Optimisation des performances (kiosque Windows 11)
+
+### Mode de lancement recommandé
+
+Utiliser **`pnpm preview`** (via `start.bat`) plutôt que `pnpm dev` :
+
+| | `pnpm dev` | `pnpm preview` |
+| --- | --- | --- |
+| JS livré | fichiers source transpilés à la volée | bundle minifié, tree-shaken |
+| Requêtes réseau | une par import (centaines) | quelques chunks |
+| Three.js / Tone.js | modules entiers, non-optimisés | dead-code éliminé |
+| Overhead Vite | HMR, watchers, middleware dev | serveur statique minimal |
+
+### Alimentation
+
+- **Panneau de configuration → Options d'alimentation** → sélectionner **"Performances élevées"**
+- Désactiver la mise en veille et l'extinction de l'écran (mettre sur "Jamais")
+
+### Démarrage / tâches de fond
+
+- `Paramètres → Applications → Démarrage` : désactiver tout sauf le strict nécessaire
+- `Gestionnaire des tâches → Démarrage` : même chose
+- Désactiver OneDrive, Teams, et autres apps qui saturent le disque au démarrage
+
+### Antivirus
+
+Ajouter le dossier du projet et le dossier Chrome en **exclusion Windows Defender** — l'analyse temps réel des fichiers JS/wasm ajoute de la latence :
+
+`Sécurité Windows → Protection contre les virus → Exclusions → Ajouter un dossier`
+
+### Chrome (GPU & WebGPU)
+
+- `chrome://settings/system` → activer **"Utiliser l'accélération matérielle lorsque disponible"**
+- `chrome://flags/#enable-unsafe-webgpu` → **Enabled**
+- Mettre à jour les drivers GPU (NVIDIA/AMD/Intel)
+
+### Effets visuels Windows
+
+- `Paramètres → Accessibilité → Effets visuels` → désactiver transparence et animations
+- Ou : clic droit sur "Ce PC" → Propriétés → Paramètres système avancés → Performances → **"Ajuster pour obtenir les meilleures performances"**
+
+### Mises à jour automatiques
+
+`Paramètres → Windows Update → Options avancées → Heures actives` : définir une plage couvrant les heures d'utilisation pour bloquer les redémarrages intempestifs.
+
+### BIOS (si accès possible)
+
+Désactiver les modes C-States / EIST (économie d'énergie CPU) pour éviter les micro-latences de réveil du processeur.
